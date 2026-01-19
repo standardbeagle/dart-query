@@ -1,0 +1,39 @@
+# Development files
+src/
+tests/
+.claude/
+*.test.ts
+
+# Configuration
+tsconfig.json
+vitest.config.ts
+.eslintrc.json
+
+# Build artifacts
+*.tsbuildinfo
+.tsbuildinfo
+
+# Development
+.vscode/
+.idea/
+*.log
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Documentation (keep README.md)
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+
+# Misc
+.DS_Store
+Thumbs.db
+node_modules/

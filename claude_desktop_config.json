@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "dart-query": {
+      "command": "node",
+      "args": [
+        "/home/beagle/work/mcps/dart-query/dist/index.js"
+      ],
+      "env": {
+        "DART_TOKEN": "YOUR_DART_TOKEN_HERE"
+      }
+    }
+  }
+}

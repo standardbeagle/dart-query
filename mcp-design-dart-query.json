@@ -1,0 +1,1512 @@
+{
+  "mcp_design": {
+    "metadata": {
+      "name": "dart-query",
+      "version": "1.0.0",
+      "description": "Advanced MCP server for Dart AI task management with progressive disclosure, batch operations, SQL-like selectors, and CSV import capabilities",
+      "pattern": "Hub-and-Spoke + CRUD + Batch Processing",
+      "tool_count": 18,
+      "progressive_discovery": true,
+      "token_efficiency": "high",
+      "implementation_language": "TypeScript",
+      "runtime": "Node.js 18+",
+      "testing_environment": "Production only (no sandbox available)",
+      "production_safety_level": "high (dry_run modes, confirm flags, validation phases)"
+    },
+
+    "architecture": {
+      "overview": "Multi-layer architecture with discovery layer (info), single-operation layer (CRUD), query layer (search/filter), and batch operation layer (bulk updates, CSV import)",
+
+      "tool_relationships": "Info tool acts as entry point for progressive discovery. Single operations (get_task, create_task) generate dart_ids consumed by batch operations. Query tools (list_tasks, search_tasks) return result sets with dart_ids. Batch tools accept selector expressions that internally resolve to dart_ids through query layer.",
+
+      "token_systems": {
+        "dart_id": {
+          "format": "duid_[a-zA-Z0-9]+",
+          "generated_by": ["list_tasks", "search_tasks", "create_task", "import_tasks_csv"],
+          "consumed_by": ["get_task", "update_task", "delete_task", "add_task_comment", "batch_update_tasks", "batch_delete_tasks"],
+          "purpose": "Universal reference for tasks across all operations, enables token-efficient cross-tool workflows"
+        },
+        "dartboard_id": {
+          "format": "duid_[a-zA-Z0-9]+",
+          "generated_by": ["get_config", "list_dartboards"],
+          "consumed_by": ["create_task", "list_tasks", "selector expressions"],
+          "purpose": "Reference dartboards for task organization and filtering"
+        },
+        "doc_id": {
+          "format": "duid_[a-zA-Z0-9]+",
+          "generated_by": ["list_docs", "create_doc"],
+          "consumed_by": ["get_doc", "update_doc", "delete_doc"],
+          "purpose": "Reference documents for knowledge management"
+        },
+        "batch_operation_id": {
+          "format": "batch_[timestamp]_[uuid]",
+          "generated_by": ["batch_update_tasks", "batch_delete_tasks", "import_tasks_csv"],
+          "consumed_by": ["get_batch_status"],
+          "purpose": "Track multi-step batch operations for progress monitoring and error recovery"
+        }
+      },
+
+      "selector_language": {
+        "name": "DartQL (Dart Query Language)",
+        "syntax": "SQL-inspired WHERE clause syntax for filtering tasks",
+        "supported_operators": {
+          "comparison": ["=", "!=", ">", ">=", "<", "<=", "IN", "NOT IN", "LIKE", "CONTAINS"],
+          "logical": ["AND", "OR", "NOT"],
+          "special": ["IS NULL", "IS NOT NULL", "BETWEEN"]
+        },
+        "supported_fields": [
+          "status", "priority", "size", "title", "description",
+          "assignee", "dartboard", "tags", "created_at", "updated_at",
+          "due_at", "start_at", "completed_at", "parent_task"
+        ],
+        "examples": [
+          "status = 'In Progress' AND priority >= 3",
+          "assignee IN ('duid_user1', 'duid_user2') AND dartboard = 'duid_board1'",
+          "tags CONTAINS 'urgent' AND due_at < '2026-02-01'",
+          "(status = 'Todo' OR status = 'In Progress') AND NOT (priority = 1)",
+          "title LIKE '%bug%' AND created_at BETWEEN '2026-01-01' AND '2026-01-31'"
+        ],
+        "implementation_note": "Parser converts DartQL to internal filter objects, then executes list_tasks with appropriate filters, collecting dart_ids for batch operations"
+      },
+
+      "csv_import_schema": {
+        "required_columns": ["title"],
+        "optional_columns": [
+          "description", "status", "priority", "size", "assignee",
+          "dartboard", "tags", "due_date", "start_date", "parent_task"
+        ],
+        "supported_formats": {
+          "inline": "CSV content as string parameter",
+          "file_path": "Absolute or relative path to .csv file"
+        },
+        "validation_phases": [
+          "1. Parse CSV and validate structure",
+          "2. Resolve references (dartboard names → dart_ids, assignee emails → dart_ids)",
+          "3. Preview tasks with warnings/errors",
+          "4. Batch create with progress tracking",
+          "5. Report successes and failures with recovery options"
+        ],
+        "error_handling": "Continue-on-error mode: collect failures, create successes, return detailed error report with line numbers"
+      },
+
+      "dependencies": {
+        "required": [
+          "@modelcontextprotocol/sdk - MCP server framework",
+          "dart-typescript-sdk or axios/fetch - Dart API calls",
+          "papaparse - CSV parsing with flexible column handling",
+          "DartQL parser - custom TypeScript implementation (tokenizer + AST parser)"
+        ],
+        "optional": [
+          "node-cache or lru-cache - get_config caching layer (5-minute TTL)",
+          "p-limit - concurrency control for batch operations",
+          "p-retry - exponential backoff for rate limiting",
+          "zod - runtime schema validation for tool inputs"
+        ],
+        "typescript_config": {
+          "target": "ES2020 or higher",
+          "module": "commonjs or ESNext",
+          "strict": true,
+          "esModuleInterop": true
+        }
+      }
+    },
+
+    "enforced_questions": [
+      {
+        "question": "How should the server handle Dart API authentication?",
+        "recommendation": "Use DART_TOKEN environment variable (format: dsa_*) obtained from https://app.dartai.com/?settings=account. Validate token on server startup by calling get_config."
+      },
+      {
+        "question": "What happens when batch operations partially fail?",
+        "recommendation": "Continue processing remaining items, collect all errors, return detailed report with successful_ids, failed_items with reasons, and batch_operation_id for tracking. Provide rollback option if all items failed."
+      },
+      {
+        "question": "Should results be cached to reduce API calls?",
+        "recommendation": "Cache get_config results for 5 minutes since workspace configuration changes infrequently. Do NOT cache task data as it changes frequently. Provide cache_bust parameter for manual refresh."
+      },
+      {
+        "question": "What rate limits should be implemented?",
+        "recommendation": "Implement exponential backoff on 429 responses. For batch operations, use configurable concurrency (default: 5 concurrent API calls). Estimate batch operation time and warn user for operations >50 items."
+      },
+      {
+        "question": "How should the selector language handle invalid field names?",
+        "recommendation": "Fail fast with clear error: 'Unknown field: X. Valid fields: [list]'. Provide fuzzy matching suggestions for typos. Include validation in DartQL parser before API calls."
+      },
+      {
+        "question": "What CSV column mapping should be supported?",
+        "recommendation": "Support flexible column names: 'Title' = 'title', 'Task Name' = 'title', 'Assigned To' = 'assignee'. Case-insensitive. First row must be headers. Document standard column names in info tool."
+      }
+    ],
+
+    "tools": [
+      {
+        "name": "info",
+        "group": "discovery",
+        "description": "Progressive discovery of dart-query capabilities - start here",
+        "parameters": {
+          "input_schema": {
+            "level": {
+              "type": "string",
+              "enum": ["overview", "group", "tool"],
+              "required": false,
+              "default": "overview",
+              "description": "Detail level: overview=categories, group=tools in category, tool=full documentation"
+            },
+            "target": {
+              "type": "string",
+              "required": false,
+              "description": "Group name (when level=group) or tool name (when level=tool)"
+            }
+          },
+          "output_schema": {
+            "level": "string (echoed back)",
+            "content": "string (sparse table for overview/group, full documentation for tool)",
+            "next_steps": "array<string> (suggested follow-up queries)"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": []
+        },
+        "relationships": "Entry point tool - guides users to appropriate tools for their task",
+        "use_cases": [
+          "User asks 'What can this MCP do?'",
+          "User wants to know batch operation capabilities",
+          "User needs help with DartQL selector syntax"
+        ],
+        "user_stories": [
+          "As an AI agent, I want to discover available operations without reading all tool schemas",
+          "As a developer, I want to learn DartQL syntax through progressive examples"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "render_overview() - Generate sparse table of tool groups",
+            "render_group(group_name) - List tools in specific group with brief descriptions",
+            "render_tool(tool_name) - Full schema and examples for specific tool"
+          ],
+          "usage_patterns": "No external API calls. Pure documentation rendering. Token budget: overview=~100, group=~200, tool=~500",
+          "pseudocode": "if level=='overview': return render_overview(); elif level=='group': return render_group(target); else: return render_tool(target)"
+        },
+        "token_budget": 150,
+        "performance": "instant",
+        "response_example": {
+          "level": "overview",
+          "content": "Dart Query MCP - Task Management with Batch Operations\n\nTool Groups\n-----------\nGroup      | Count | Purpose\n---------- | ----- | -------\ndiscovery  | 1     | Progressive capability discovery\nconfig     | 1     | Workspace configuration\ntask-crud  | 6     | Single task operations\ntask-query | 2     | Search and filter tasks\ntask-batch | 3     | Bulk operations on multiple tasks\ndoc-crud   | 5     | Document management\nimport     | 1     | CSV bulk import\n\nQuick Start: info(level='group', target='task-crud')\nBatch Ops:   info(level='group', target='task-batch')\nDartQL Help: info(level='tool', target='batch_update_tasks')",
+          "next_steps": [
+            "info(level='group', target='task-batch') - Learn batch operations",
+            "get_config() - Get workspace configuration before creating tasks"
+          ]
+        }
+      },
+
+      {
+        "name": "get_config",
+        "group": "config",
+        "description": "Get workspace configuration: assignees, dartboards, statuses, tags, priorities, sizes",
+        "parameters": {
+          "input_schema": {
+            "cache_bust": {
+              "type": "boolean",
+              "required": false,
+              "default": false,
+              "description": "Force refresh cached config (default: 5-minute cache)"
+            },
+            "include": {
+              "type": "array",
+              "items": {"enum": ["assignees", "dartboards", "statuses", "tags", "priorities", "sizes", "folders"]},
+              "required": false,
+              "description": "Limit response to specific config sections (default: all)"
+            }
+          },
+          "output_schema": {
+            "assignees": "array<{dart_id, name, email, role}>",
+            "dartboards": "array<{dart_id, name, description}>",
+            "statuses": "array<{dart_id, name, color, order}>",
+            "tags": "array<{dart_id, name, color}>",
+            "priorities": "array<{value: 1-5, label}>",
+            "sizes": "array<{value: 1-5, label}>",
+            "folders": "array<{dart_id, name, space_id}>",
+            "cached_at": "iso8601 timestamp",
+            "cache_ttl_seconds": "integer"
+          }
+        },
+        "id_tokens": {
+          "generates": ["dartboard_id", "folder_id", "assignee_id", "status_id", "tag_id"],
+          "consumes": []
+        },
+        "relationships": "Prerequisite for create_task, import_tasks_csv, and selector resolution. Cached to reduce API calls.",
+        "use_cases": [
+          "Before creating tasks - get valid dartboard_ids and assignee_ids",
+          "Before importing CSV - validate dartboard names and assignee emails",
+          "Building selector expressions - get valid status and tag values"
+        ],
+        "user_stories": [
+          "As an agent, I want to validate task parameters before creation to avoid API errors",
+          "As a CSV importer, I want to resolve human-readable names to dart_ids"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.get_config() - API call to /api/v0/config or equivalent",
+            "cache_get(key='config', ttl=300) - Retrieve cached config",
+            "cache_set(key='config', value, ttl=300) - Store config for 5 minutes"
+          ],
+          "usage_patterns": "Check cache first unless cache_bust=true. Filter response by include parameter to reduce tokens. Always include dart_ids in responses.",
+          "pseudocode": "if cache_bust or cache_expired: config = dart_api.get_config(); cache_set(config); else: config = cache_get(); if include: config = filter_fields(config, include); return config"
+        },
+        "token_budget": 400,
+        "performance": "fast (cached) / medium (API call)",
+        "progressive_detail": "When include parameter is used, return only requested sections to save tokens"
+      },
+
+      {
+        "name": "list_tasks",
+        "group": "task-query",
+        "description": "List tasks with optional filtering by assignee, status, dartboard, priority, due date, and more",
+        "parameters": {
+          "input_schema": {
+            "assignee": {
+              "type": "string",
+              "required": false,
+              "description": "Filter by assignee dart_id"
+            },
+            "status": {
+              "type": "string",
+              "required": false,
+              "description": "Filter by status name or dart_id"
+            },
+            "dartboard": {
+              "type": "string",
+              "required": false,
+              "description": "Filter by dartboard dart_id"
+            },
+            "priority": {
+              "type": "integer",
+              "required": false,
+              "description": "Filter by priority (1-5)"
+            },
+            "tags": {
+              "type": "array",
+              "items": {"type": "string"},
+              "required": false,
+              "description": "Filter by tag dart_ids (OR logic)"
+            },
+            "due_before": {
+              "type": "string",
+              "format": "iso8601",
+              "required": false,
+              "description": "Tasks due before this date"
+            },
+            "due_after": {
+              "type": "string",
+              "format": "iso8601",
+              "required": false,
+              "description": "Tasks due after this date"
+            },
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 50,
+              "description": "Max results to return (default: 50, max: 500)"
+            },
+            "offset": {
+              "type": "integer",
+              "required": false,
+              "default": 0,
+              "description": "Pagination offset"
+            },
+            "detail_level": {
+              "type": "string",
+              "enum": ["minimal", "standard", "full"],
+              "required": false,
+              "default": "standard",
+              "description": "minimal=dart_id+title, standard=+status+assignee+priority, full=all fields"
+            }
+          },
+          "output_schema": {
+            "tasks": "array<task_object>",
+            "total_count": "integer",
+            "returned_count": "integer",
+            "has_more": "boolean",
+            "next_offset": "integer | null",
+            "filters_applied": "object (echoed back for verification)"
+          }
+        },
+        "id_tokens": {
+          "generates": ["dart_id"],
+          "consumes": ["dartboard_id", "assignee_id", "tag_id"]
+        },
+        "relationships": "Hub tool for task discovery. Returns dart_ids consumed by update_task, delete_task, get_task. Feeds batch operations.",
+        "use_cases": [
+          "Find all high-priority tasks in a specific dartboard",
+          "Get tasks assigned to a specific user",
+          "Find overdue tasks across all dartboards"
+        ],
+        "user_stories": [
+          "As a project manager, I want to see all tasks due this week",
+          "As an agent, I want to collect dart_ids for batch operations"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.list_tasks(filters) - API call to task list endpoint",
+            "apply_filters(tasks, filters) - Client-side filtering if API doesn't support all filters",
+            "format_task(task, detail_level) - Transform task object based on detail_level"
+          ],
+          "usage_patterns": "Always return dart_id in results. Use detail_level to control token usage. Default to standard level.",
+          "pseudocode": "tasks = dart_api.list_tasks(filters); tasks = [format_task(t, detail_level) for t in tasks]; return {tasks, total_count, has_more, ...}"
+        },
+        "token_budget": 300,
+        "performance": "medium",
+        "progressive_detail": "detail_level='minimal' for dart_id collection (batch ops), 'standard' for overview, 'full' for detailed inspection"
+      },
+
+      {
+        "name": "search_tasks",
+        "group": "task-query",
+        "description": "Full-text search across task titles and descriptions with relevance ranking",
+        "parameters": {
+          "input_schema": {
+            "query": {
+              "type": "string",
+              "required": true,
+              "description": "Search query (supports phrases in quotes, - for exclusion)"
+            },
+            "dartboard": {
+              "type": "string",
+              "required": false,
+              "description": "Limit search to specific dartboard dart_id"
+            },
+            "include_completed": {
+              "type": "boolean",
+              "required": false,
+              "default": false,
+              "description": "Include completed tasks in results"
+            },
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 20,
+              "description": "Max results (default: 20, max: 100)"
+            },
+            "detail_level": {
+              "type": "string",
+              "enum": ["minimal", "standard", "full"],
+              "required": false,
+              "default": "standard"
+            }
+          },
+          "output_schema": {
+            "results": "array<{task, relevance_score, matched_fields}>",
+            "total_matches": "integer",
+            "returned_count": "integer",
+            "query_processed": "string (tokenized query for verification)"
+          }
+        },
+        "id_tokens": {
+          "generates": ["dart_id"],
+          "consumes": ["dartboard_id"]
+        },
+        "relationships": "Alternative to list_tasks for text-based discovery. Returns dart_ids for downstream operations.",
+        "use_cases": [
+          "Find tasks mentioning specific keywords",
+          "Search for bug reports containing error messages",
+          "Locate tasks related to a feature name"
+        ],
+        "user_stories": [
+          "As a developer, I want to find all tasks mentioning 'authentication bug'",
+          "As an agent, I want to search for tasks related to user feedback"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.search_tasks(query, filters) - API call if available",
+            "fallback_search(tasks, query) - Client-side search if API doesn't support",
+            "calculate_relevance(task, query) - Score based on title/description matches"
+          ],
+          "usage_patterns": "Prefer API-based search. Fall back to list_tasks + client-side filtering if needed. Sort by relevance_score descending.",
+          "pseudocode": "if api_supports_search: results = dart_api.search_tasks(query); else: all_tasks = dart_api.list_tasks(); results = filter_and_score(all_tasks, query); return sorted(results, key=relevance_score, reverse=True)"
+        },
+        "token_budget": 250,
+        "performance": "medium",
+        "progressive_detail": "Return high-relevance matches (>0.7) with full details, medium (0.4-0.7) with standard, low (<0.4) with minimal"
+      },
+
+      {
+        "name": "create_task",
+        "group": "task-crud",
+        "description": "Create a new task with title, description, status, priority, size, dates, dartboard, assignees, tags",
+        "parameters": {
+          "input_schema": {
+            "title": {
+              "type": "string",
+              "required": true,
+              "description": "Task title (max 500 chars)"
+            },
+            "description": {
+              "type": "string",
+              "required": false,
+              "description": "Task description (markdown supported)"
+            },
+            "dartboard": {
+              "type": "string",
+              "required": true,
+              "description": "Dartboard dart_id (use get_config to find)"
+            },
+            "status": {
+              "type": "string",
+              "required": false,
+              "description": "Status name or dart_id (default: first status in dartboard)"
+            },
+            "priority": {
+              "type": "integer",
+              "required": false,
+              "description": "Priority 1-5 (1=lowest, 5=highest)"
+            },
+            "size": {
+              "type": "integer",
+              "required": false,
+              "description": "Size estimate 1-5"
+            },
+            "assignees": {
+              "type": "array",
+              "items": {"type": "string"},
+              "required": false,
+              "description": "Array of assignee dart_ids"
+            },
+            "tags": {
+              "type": "array",
+              "items": {"type": "string"},
+              "required": false,
+              "description": "Array of tag dart_ids"
+            },
+            "due_at": {
+              "type": "string",
+              "format": "iso8601",
+              "required": false,
+              "description": "Due date"
+            },
+            "start_at": {
+              "type": "string",
+              "format": "iso8601",
+              "required": false,
+              "description": "Start date"
+            },
+            "parent_task": {
+              "type": "string",
+              "required": false,
+              "description": "Parent task dart_id for subtasks"
+            }
+          },
+          "output_schema": {
+            "dart_id": "string",
+            "title": "string",
+            "url": "string (deep link to task in Dart web app)",
+            "created_at": "iso8601 timestamp",
+            "all_fields": "object (created task with all properties)"
+          }
+        },
+        "id_tokens": {
+          "generates": ["dart_id"],
+          "consumes": ["dartboard_id", "assignee_id", "tag_id", "status_id", "parent_dart_id"]
+        },
+        "relationships": "Primary creation tool. Returns dart_id for future updates/deletes. Requires get_config for valid references.",
+        "use_cases": [
+          "Create new task from user request",
+          "Create subtask under existing parent",
+          "Bulk creation via import_tasks_csv"
+        ],
+        "user_stories": [
+          "As a team lead, I want to create a task and assign it to multiple team members",
+          "As an agent, I want to create tasks programmatically from parsed requirements"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.create_task(task_data) - API POST to /tasks endpoint",
+            "validate_references(task_data, config) - Ensure dartboard, assignees, tags exist",
+            "resolve_status(status_input, dartboard_id, config) - Convert status name to dart_id"
+          ],
+          "usage_patterns": "Call get_config first to validate references. Use dart.transact for atomic creation with relationships.",
+          "pseudocode": "validate_references(task_data); task = dart_api.create_task(task_data); return {dart_id: task.id, url: f'https://app.dartai.com/task/{task.id}', ...task}"
+        },
+        "token_budget": 200,
+        "performance": "fast"
+      },
+
+      {
+        "name": "get_task",
+        "group": "task-crud",
+        "description": "Retrieve an existing task by its dart_id with full details",
+        "parameters": {
+          "input_schema": {
+            "dart_id": {
+              "type": "string",
+              "required": true,
+              "description": "Task dart_id (from list_tasks or create_task)"
+            },
+            "include_comments": {
+              "type": "boolean",
+              "required": false,
+              "default": false,
+              "description": "Include task comments in response"
+            }
+          },
+          "output_schema": {
+            "task": "object (full task details)",
+            "comments": "array<{author, text, created_at}> | null",
+            "url": "string"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": ["dart_id"]
+        },
+        "relationships": "Detail tool - consumes dart_ids from list_tasks/search_tasks",
+        "use_cases": [
+          "Get full task details after minimal search",
+          "Retrieve task before updating",
+          "Inspect task with comments"
+        ],
+        "user_stories": [
+          "As an agent, I want to read task details before deciding on updates",
+          "As a user, I want to see task history including comments"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.get_task(dart_id) - API GET /tasks/{dart_id}",
+            "dart_api.get_task_comments(dart_id) - API GET /tasks/{dart_id}/comments if include_comments=true"
+          ],
+          "usage_patterns": "Single API call unless include_comments=true (then 2 calls). Cache not recommended (task data changes frequently).",
+          "pseudocode": "task = dart_api.get_task(dart_id); comments = dart_api.get_task_comments(dart_id) if include_comments else null; return {task, comments, url}"
+        },
+        "token_budget": 300,
+        "performance": "fast"
+      },
+
+      {
+        "name": "update_task",
+        "group": "task-crud",
+        "description": "Update an existing task's properties (status, title, description, priority, assignees, etc.)",
+        "parameters": {
+          "input_schema": {
+            "dart_id": {
+              "type": "string",
+              "required": true,
+              "description": "Task dart_id to update"
+            },
+            "updates": {
+              "type": "object",
+              "required": true,
+              "description": "Fields to update (only changed fields required)",
+              "properties": {
+                "title": "string",
+                "description": "string",
+                "status": "string (name or dart_id)",
+                "priority": "integer 1-5",
+                "size": "integer 1-5",
+                "assignees": "array<dart_id>",
+                "tags": "array<dart_id>",
+                "due_at": "iso8601 | null",
+                "start_at": "iso8601 | null"
+              }
+            }
+          },
+          "output_schema": {
+            "dart_id": "string",
+            "updated_fields": "array<string>",
+            "task": "object (updated task)",
+            "url": "string"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": ["dart_id", "assignee_id", "tag_id", "status_id"]
+        },
+        "relationships": "Update tool - consumes dart_ids. Used by batch_update_tasks for bulk operations.",
+        "use_cases": [
+          "Change task status to completed",
+          "Reassign task to different user",
+          "Update task priority after review"
+        ],
+        "user_stories": [
+          "As a team member, I want to mark my task as done",
+          "As a manager, I want to update task priorities based on urgency"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.update_task(dart_id, updates) - API PATCH /tasks/{dart_id}",
+            "validate_updates(updates, config) - Ensure status, assignees, tags are valid",
+            "diff_fields(original, updates) - Track which fields actually changed"
+          ],
+          "usage_patterns": "Use dart.transact for atomic updates. Only send changed fields to API. Validate references against config.",
+          "pseudocode": "validate_updates(updates); task = dart_api.update_task(dart_id, updates); changed = diff_fields(task, updates); return {dart_id, updated_fields: changed, task, url}"
+        },
+        "token_budget": 150,
+        "performance": "fast"
+      },
+
+      {
+        "name": "delete_task",
+        "group": "task-crud",
+        "description": "Move a task to trash (recoverable from Dart web UI)",
+        "parameters": {
+          "input_schema": {
+            "dart_id": {
+              "type": "string",
+              "required": true,
+              "description": "Task dart_id to delete"
+            }
+          },
+          "output_schema": {
+            "dart_id": "string",
+            "deleted": "boolean",
+            "deleted_at": "iso8601 timestamp",
+            "recoverable": "boolean (always true - tasks go to trash)"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": ["dart_id"]
+        },
+        "relationships": "Destructive operation. Used by batch_delete_tasks for bulk deletion.",
+        "use_cases": [
+          "Remove duplicate task",
+          "Delete obsolete task",
+          "Clean up test tasks"
+        ],
+        "user_stories": [
+          "As a user, I want to delete a mistakenly created task",
+          "As an agent, I want to clean up bulk-imported duplicate tasks"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.delete_task(dart_id) - API DELETE /tasks/{dart_id}"
+          ],
+          "usage_patterns": "Confirm before deletion in interactive mode. Trash is recoverable via web UI.",
+          "pseudocode": "result = dart_api.delete_task(dart_id); return {dart_id, deleted: true, deleted_at: now(), recoverable: true}"
+        },
+        "token_budget": 50,
+        "performance": "fast"
+      },
+
+      {
+        "name": "add_task_comment",
+        "group": "task-crud",
+        "description": "Add a comment to an existing task",
+        "parameters": {
+          "input_schema": {
+            "dart_id": {
+              "type": "string",
+              "required": true,
+              "description": "Task dart_id to comment on"
+            },
+            "text": {
+              "type": "string",
+              "required": true,
+              "description": "Comment text (markdown supported)"
+            }
+          },
+          "output_schema": {
+            "comment_id": "string",
+            "dart_id": "string (task)",
+            "text": "string",
+            "author": "object {dart_id, name}",
+            "created_at": "iso8601 timestamp"
+          }
+        },
+        "id_tokens": {
+          "generates": ["comment_id"],
+          "consumes": ["dart_id"]
+        },
+        "relationships": "Augments tasks with contextual information. Used for status updates, notes, AI insights.",
+        "use_cases": [
+          "Add status update to task",
+          "Leave note for assignee",
+          "Document AI decision rationale"
+        ],
+        "user_stories": [
+          "As an agent, I want to explain why I updated task priority",
+          "As a team member, I want to ask clarifying questions on a task"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.add_comment(dart_id, text) - API POST /tasks/{dart_id}/comments"
+          ],
+          "usage_patterns": "Simple append operation. Support markdown formatting.",
+          "pseudocode": "comment = dart_api.add_comment(dart_id, text); return {comment_id: comment.id, dart_id, text, author, created_at}"
+        },
+        "token_budget": 100,
+        "performance": "fast"
+      },
+
+      {
+        "name": "batch_update_tasks",
+        "group": "task-batch",
+        "description": "Update multiple tasks matching a DartQL selector expression (supports SQL-like WHERE syntax)",
+        "parameters": {
+          "input_schema": {
+            "selector": {
+              "type": "string",
+              "required": true,
+              "description": "DartQL WHERE clause (e.g., \"status = 'Todo' AND priority >= 3\")"
+            },
+            "updates": {
+              "type": "object",
+              "required": true,
+              "description": "Fields to update on all matching tasks",
+              "properties": {
+                "status": "string",
+                "priority": "integer",
+                "assignees": "array<dart_id>",
+                "tags": "array<dart_id>",
+                "due_at": "iso8601 | null"
+              }
+            },
+            "dry_run": {
+              "type": "boolean",
+              "required": false,
+              "default": false,
+              "description": "Preview matching tasks without updating (recommended for first run)"
+            },
+            "concurrency": {
+              "type": "integer",
+              "required": false,
+              "default": 5,
+              "description": "Max concurrent API calls (1-20)"
+            }
+          },
+          "output_schema": {
+            "batch_operation_id": "string",
+            "selector_matched": "integer (total tasks matching selector)",
+            "dry_run": "boolean",
+            "preview_tasks": "array<{dart_id, title, current_values}> | null (if dry_run=true)",
+            "successful_updates": "integer",
+            "failed_updates": "integer",
+            "successful_dart_ids": "array<string>",
+            "failed_items": "array<{dart_id, error, reason}>",
+            "execution_time_ms": "integer"
+          }
+        },
+        "id_tokens": {
+          "generates": ["batch_operation_id"],
+          "consumes": ["dart_id (via selector resolution)"]
+        },
+        "relationships": "Batch wrapper around update_task. Uses list_tasks + DartQL parser to resolve selectors to dart_ids, then parallel update_task calls.",
+        "use_cases": [
+          "Reassign all high-priority bugs to specific user",
+          "Extend due date for all tasks in specific dartboard",
+          "Change status of all completed tasks to archived"
+        ],
+        "user_stories": [
+          "As a project manager, I want to bulk-update task priorities based on sprint planning",
+          "As an agent, I want to reassign all unassigned urgent tasks to on-call engineer"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "parse_dartql(selector) - Convert DartQL to filter object",
+            "resolve_selector(selector) - Execute list_tasks with filters, return dart_ids",
+            "parallel_update(dart_ids, updates, concurrency) - Concurrent update_task calls with rate limiting",
+            "generate_batch_id() - Create unique batch_operation_id"
+          ],
+          "usage_patterns": "ALWAYS recommend dry_run=true for first execution. Parse selector, resolve to dart_ids, show preview. On confirmation, execute parallel updates with error collection.",
+          "pseudocode": "dart_ids = resolve_selector(selector); if dry_run: preview = [get_task(id) for id in dart_ids[:10]]; return {preview_tasks: preview, matched: len(dart_ids)}; results = parallel_update(dart_ids, updates, concurrency); return {batch_id, successful_ids, failed_items, execution_time}"
+        },
+        "token_budget": 400,
+        "performance": "slow (depends on match count)",
+        "progressive_detail": "dry_run mode returns preview (max 10 tasks). Full execution returns summary stats + failed_items details."
+      },
+
+      {
+        "name": "batch_delete_tasks",
+        "group": "task-batch",
+        "description": "Delete multiple tasks matching a DartQL selector expression (moves to trash, recoverable)",
+        "parameters": {
+          "input_schema": {
+            "selector": {
+              "type": "string",
+              "required": true,
+              "description": "DartQL WHERE clause to identify tasks to delete"
+            },
+            "dry_run": {
+              "type": "boolean",
+              "required": false,
+              "default": true,
+              "description": "Preview matching tasks without deleting (default: true for safety)"
+            },
+            "confirm": {
+              "type": "boolean",
+              "required": false,
+              "default": false,
+              "description": "Must be true to execute deletion (safety check)"
+            },
+            "concurrency": {
+              "type": "integer",
+              "required": false,
+              "default": 5,
+              "description": "Max concurrent API calls"
+            }
+          },
+          "output_schema": {
+            "batch_operation_id": "string",
+            "selector_matched": "integer",
+            "dry_run": "boolean",
+            "preview_tasks": "array<{dart_id, title}> | null",
+            "successful_deletions": "integer",
+            "failed_deletions": "integer",
+            "deleted_dart_ids": "array<string>",
+            "failed_items": "array<{dart_id, error}>",
+            "recoverable": "boolean (always true)"
+          }
+        },
+        "id_tokens": {
+          "generates": ["batch_operation_id"],
+          "consumes": ["dart_id (via selector resolution)"]
+        },
+        "relationships": "Batch wrapper around delete_task. Requires confirm=true for execution (safety).",
+        "use_cases": [
+          "Clean up test tasks created during development",
+          "Remove duplicate tasks from bulk import errors",
+          "Archive old completed tasks"
+        ],
+        "user_stories": [
+          "As a developer, I want to delete all test tasks after QA",
+          "As an admin, I want to bulk-delete spam tasks"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "resolve_selector(selector) - Get dart_ids matching selector",
+            "parallel_delete(dart_ids, concurrency) - Concurrent delete_task calls"
+          ],
+          "usage_patterns": "REQUIRE dry_run=true for first call. REQUIRE confirm=true to execute. Show preview, wait for explicit confirmation.",
+          "pseudocode": "dart_ids = resolve_selector(selector); if dry_run: return {preview: dart_ids[:20], matched: len(dart_ids)}; if not confirm: raise Error('Must set confirm=true'); results = parallel_delete(dart_ids); return {batch_id, deleted_ids, failed_items}"
+        },
+        "token_budget": 300,
+        "performance": "slow",
+        "progressive_detail": "dry_run shows preview (max 20 tasks). Execution returns summary + failures only."
+      },
+
+      {
+        "name": "import_tasks_csv",
+        "group": "import",
+        "description": "Bulk-create tasks from CSV data (inline text or file path) with validation and error recovery",
+        "parameters": {
+          "input_schema": {
+            "csv_data": {
+              "type": "string",
+              "required": false,
+              "description": "Inline CSV content (first row must be headers)"
+            },
+            "csv_file_path": {
+              "type": "string",
+              "required": false,
+              "description": "Path to CSV file (alternative to csv_data)"
+            },
+            "dartboard": {
+              "type": "string",
+              "required": true,
+              "description": "Default dartboard dart_id (can be overridden per-row via 'dartboard' column)"
+            },
+            "column_mapping": {
+              "type": "object",
+              "required": false,
+              "description": "Custom column name mappings (e.g., {'Task Name': 'title', 'Assigned To': 'assignee'})"
+            },
+            "validate_only": {
+              "type": "boolean",
+              "required": false,
+              "default": false,
+              "description": "Validate and preview without creating tasks"
+            },
+            "continue_on_error": {
+              "type": "boolean",
+              "required": false,
+              "default": true,
+              "description": "Continue processing if individual rows fail"
+            },
+            "concurrency": {
+              "type": "integer",
+              "required": false,
+              "default": 5,
+              "description": "Max concurrent task creation calls"
+            }
+          },
+          "output_schema": {
+            "batch_operation_id": "string",
+            "total_rows": "integer",
+            "valid_rows": "integer",
+            "invalid_rows": "integer",
+            "validation_errors": "array<{row_number, errors}>",
+            "preview": "array<{row_number, task_preview}> | null (if validate_only=true)",
+            "created_tasks": "integer",
+            "failed_tasks": "integer",
+            "created_dart_ids": "array<string>",
+            "failed_items": "array<{row_number, error, row_data}>",
+            "execution_time_ms": "integer"
+          }
+        },
+        "id_tokens": {
+          "generates": ["batch_operation_id", "dart_id (for created tasks)"],
+          "consumes": ["dartboard_id", "assignee_id (resolved from email)", "tag_id (resolved from name)"]
+        },
+        "relationships": "Batch creation tool. Parses CSV, resolves references via get_config, validates, then parallel create_task calls.",
+        "use_cases": [
+          "Import tasks from project planning spreadsheet",
+          "Migrate tasks from another tool via CSV export",
+          "Bulk-create recurring tasks from template"
+        ],
+        "user_stories": [
+          "As a project manager, I want to import 100 tasks from my Excel planning sheet",
+          "As a migration specialist, I want to import tasks from Jira CSV export with error handling"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "parse_csv(csv_data | csv_file_path) - Parse CSV to array of row objects",
+            "normalize_columns(rows, column_mapping) - Apply column mappings, handle case-insensitivity",
+            "resolve_references(row, config) - Convert dartboard names, assignee emails, tag names to dart_ids",
+            "validate_row(row, config) - Check required fields, valid references, data types",
+            "parallel_create(valid_rows, concurrency) - Concurrent create_task calls"
+          ],
+          "usage_patterns": "ALWAYS recommend validate_only=true first. Parse CSV, normalize columns, resolve all references, validate. Show preview with errors. On confirmation, execute parallel creation with continue_on_error=true.",
+          "csv_column_mapping": {
+            "required": ["title"],
+            "optional": ["description", "status", "priority", "size", "assignee", "dartboard", "tags", "due_date", "start_date", "parent_task"],
+            "flexible_names": {
+              "title": ["Title", "Task Name", "Task", "Name"],
+              "assignee": ["Assignee", "Assigned To", "Owner", "assignee_email"],
+              "dartboard": ["Dartboard", "Board", "Project", "dartboard_name"],
+              "tags": ["Tags", "Labels", "Categories (comma-separated)"]
+            }
+          },
+          "pseudocode": "rows = parse_csv(csv_data or read_file(csv_file_path)); rows = normalize_columns(rows, column_mapping); config = get_config(); validated = [validate_row(r, config) for r in rows]; if validate_only: return {preview: validated[:10], validation_errors}; valid_rows = [r for r in validated if r.valid]; results = parallel_create(valid_rows, concurrency); return {batch_id, created_dart_ids, failed_items}"
+        },
+        "token_budget": 500,
+        "performance": "slow (depends on row count)",
+        "progressive_detail": "validate_only mode returns preview (max 10 rows) + all validation errors. Full execution returns summary stats + detailed failed_items.",
+        "csv_example": "title,description,assignee,priority,tags,due_date\n\"Fix login bug\",\"Users can't login\",engineer@company.com,5,\"bug,urgent\",2026-02-01\n\"Update docs\",\"API documentation\",writer@company.com,2,documentation,2026-02-15"
+      },
+
+      {
+        "name": "list_docs",
+        "group": "doc-crud",
+        "description": "List docs with optional filtering by folder, title, text content",
+        "parameters": {
+          "input_schema": {
+            "folder": {
+              "type": "string",
+              "required": false,
+              "description": "Filter by folder dart_id"
+            },
+            "title_contains": {
+              "type": "string",
+              "required": false,
+              "description": "Filter by title substring"
+            },
+            "text_contains": {
+              "type": "string",
+              "required": false,
+              "description": "Filter by text content substring"
+            },
+            "limit": {
+              "type": "integer",
+              "required": false,
+              "default": 50
+            }
+          },
+          "output_schema": {
+            "docs": "array<{doc_id, title, folder, created_at, updated_at}>",
+            "total_count": "integer",
+            "returned_count": "integer"
+          }
+        },
+        "id_tokens": {
+          "generates": ["doc_id"],
+          "consumes": ["folder_id"]
+        },
+        "relationships": "Discovery tool for documents. Returns doc_ids for get_doc, update_doc, delete_doc.",
+        "use_cases": [
+          "Find meeting notes from last week",
+          "List all docs in project folder",
+          "Search docs by keyword"
+        ],
+        "user_stories": [
+          "As a knowledge worker, I want to find relevant documentation",
+          "As an agent, I want to retrieve project context from docs"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.list_docs(filters) - API call to docs endpoint"
+          ],
+          "usage_patterns": "Similar to list_tasks but for documents.",
+          "pseudocode": "docs = dart_api.list_docs(filters); return {docs, total_count, returned_count}"
+        },
+        "token_budget": 200,
+        "performance": "fast"
+      },
+
+      {
+        "name": "create_doc",
+        "group": "doc-crud",
+        "description": "Create a new doc with title, text content (markdown), and folder",
+        "parameters": {
+          "input_schema": {
+            "title": {
+              "type": "string",
+              "required": true
+            },
+            "text": {
+              "type": "string",
+              "required": true,
+              "description": "Doc content (markdown supported)"
+            },
+            "folder": {
+              "type": "string",
+              "required": false,
+              "description": "Folder dart_id (default: root)"
+            }
+          },
+          "output_schema": {
+            "doc_id": "string",
+            "title": "string",
+            "url": "string",
+            "created_at": "iso8601 timestamp"
+          }
+        },
+        "id_tokens": {
+          "generates": ["doc_id"],
+          "consumes": ["folder_id"]
+        },
+        "relationships": "Creation tool for documents.",
+        "use_cases": [
+          "Create meeting notes",
+          "Generate project documentation",
+          "Save AI-generated reports"
+        ],
+        "user_stories": [
+          "As an agent, I want to document my task completion analysis",
+          "As a user, I want to save formatted notes"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.create_doc(doc_data) - API POST to docs endpoint"
+          ],
+          "usage_patterns": "Support markdown formatting. Store in specified folder.",
+          "pseudocode": "doc = dart_api.create_doc({title, text, folder}); return {doc_id: doc.id, url, created_at}"
+        },
+        "token_budget": 150,
+        "performance": "fast"
+      },
+
+      {
+        "name": "get_doc",
+        "group": "doc-crud",
+        "description": "Retrieve an existing doc by its doc_id with full text content",
+        "parameters": {
+          "input_schema": {
+            "doc_id": {
+              "type": "string",
+              "required": true
+            }
+          },
+          "output_schema": {
+            "doc": "object {doc_id, title, text, folder, created_at, updated_at}",
+            "url": "string"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": ["doc_id"]
+        },
+        "relationships": "Detail retrieval for documents.",
+        "use_cases": [
+          "Read full doc content",
+          "Retrieve meeting notes",
+          "Get project documentation"
+        ],
+        "user_stories": [
+          "As an agent, I want to read project requirements from a doc",
+          "As a user, I want to view saved notes"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.get_doc(doc_id) - API GET /docs/{doc_id}"
+          ],
+          "usage_patterns": "Single API call. Return full markdown content.",
+          "pseudocode": "doc = dart_api.get_doc(doc_id); return {doc, url}"
+        },
+        "token_budget": 300,
+        "performance": "fast"
+      },
+
+      {
+        "name": "update_doc",
+        "group": "doc-crud",
+        "description": "Update an existing doc's title or text content",
+        "parameters": {
+          "input_schema": {
+            "doc_id": {
+              "type": "string",
+              "required": true
+            },
+            "updates": {
+              "type": "object",
+              "required": true,
+              "properties": {
+                "title": "string",
+                "text": "string"
+              }
+            }
+          },
+          "output_schema": {
+            "doc_id": "string",
+            "updated_fields": "array<string>",
+            "doc": "object (updated doc)",
+            "url": "string"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": ["doc_id"]
+        },
+        "relationships": "Update tool for documents.",
+        "use_cases": [
+          "Edit meeting notes",
+          "Update project documentation",
+          "Append to existing doc"
+        ],
+        "user_stories": [
+          "As an agent, I want to update documentation with new findings",
+          "As a user, I want to revise saved notes"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.update_doc(doc_id, updates) - API PATCH /docs/{doc_id}"
+          ],
+          "usage_patterns": "Support partial updates. Only send changed fields.",
+          "pseudocode": "doc = dart_api.update_doc(doc_id, updates); return {doc_id, updated_fields, doc, url}"
+        },
+        "token_budget": 150,
+        "performance": "fast"
+      },
+
+      {
+        "name": "delete_doc",
+        "group": "doc-crud",
+        "description": "Move a doc to trash (recoverable)",
+        "parameters": {
+          "input_schema": {
+            "doc_id": {
+              "type": "string",
+              "required": true
+            }
+          },
+          "output_schema": {
+            "doc_id": "string",
+            "deleted": "boolean",
+            "deleted_at": "iso8601 timestamp",
+            "recoverable": "boolean"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": ["doc_id"]
+        },
+        "relationships": "Deletion tool for documents.",
+        "use_cases": [
+          "Remove obsolete documentation",
+          "Delete duplicate doc",
+          "Clean up test docs"
+        ],
+        "user_stories": [
+          "As a user, I want to delete outdated notes",
+          "As an admin, I want to clean up workspace"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "dart_api.delete_doc(doc_id) - API DELETE /docs/{doc_id}"
+          ],
+          "usage_patterns": "Moves to trash. Recoverable via web UI.",
+          "pseudocode": "result = dart_api.delete_doc(doc_id); return {doc_id, deleted: true, deleted_at: now(), recoverable: true}"
+        },
+        "token_budget": 50,
+        "performance": "fast"
+      },
+
+      {
+        "name": "get_batch_status",
+        "group": "task-batch",
+        "description": "Get status of a long-running batch operation by batch_operation_id",
+        "parameters": {
+          "input_schema": {
+            "batch_operation_id": {
+              "type": "string",
+              "required": true,
+              "description": "Batch operation ID from batch_update_tasks, batch_delete_tasks, or import_tasks_csv"
+            }
+          },
+          "output_schema": {
+            "batch_operation_id": "string",
+            "operation_type": "string (update | delete | import)",
+            "status": "string (running | completed | failed)",
+            "progress": "object {completed: int, total: int, percent: float}",
+            "successful_ids": "array<string>",
+            "failed_items": "array<{id, error}>",
+            "started_at": "iso8601 timestamp",
+            "completed_at": "iso8601 timestamp | null",
+            "execution_time_ms": "integer | null"
+          }
+        },
+        "id_tokens": {
+          "generates": [],
+          "consumes": ["batch_operation_id"]
+        },
+        "relationships": "Monitoring tool for batch operations. Allows checking progress of long-running tasks.",
+        "use_cases": [
+          "Check progress of large CSV import",
+          "Monitor batch update of 1000+ tasks",
+          "Retrieve results after async batch operation"
+        ],
+        "user_stories": [
+          "As an agent, I want to poll batch operation status without blocking",
+          "As a user, I want to know how many tasks have been processed"
+        ],
+        "implementation_guide": {
+          "required_functions": [
+            "batch_store_get(batch_operation_id) - Retrieve batch operation state from in-memory store or database",
+            "batch_store_set(batch_operation_id, state) - Update batch operation state during execution"
+          ],
+          "usage_patterns": "Store batch operation metadata in-memory or persistent store. Update during batch execution. Provide real-time progress.",
+          "pseudocode": "state = batch_store_get(batch_operation_id); if not state: raise NotFound; return {batch_id, operation_type, status, progress, successful_ids, failed_items, timestamps}"
+        },
+        "token_budget": 200,
+        "performance": "instant",
+        "implementation_note": "For synchronous batch operations (most cases), this tool returns final results immediately. For async operations (>500 items), store state and allow polling."
+      }
+    ],
+
+    "progressive_discovery": {
+      "info_tool_structure": {
+        "overview": "Sparse table showing 7 tool groups: discovery (1), config (1), task-crud (6), task-query (2), task-batch (3), doc-crud (5), import (1). Total 18 tools. Includes quick-start examples.",
+        "category_detail": "For each group, list tools with one-line descriptions. Example: 'task-batch: batch_update_tasks (SQL-like bulk updates), batch_delete_tasks (bulk deletion), get_batch_status (monitor progress)'",
+        "tool_help": "Full tool schema with parameters, examples, DartQL syntax guide (for batch tools), CSV format guide (for import tool), common pitfalls."
+      },
+      "detail_levels": {
+        "overview": "~150 tokens - groups, counts, quick start",
+        "category": "~200 tokens - tool list with brief descriptions",
+        "tool": "~500 tokens - full schema, examples, edge cases"
+      },
+      "workflow_guidance": {
+        "new_users": "Start with info(level='overview'), then get_config() to understand workspace. Use list_tasks to explore existing tasks before creating.",
+        "batch_operations": "ALWAYS use dry_run=true first for batch_update_tasks and batch_delete_tasks. Preview results, then execute with confirm=true.",
+        "csv_import": "ALWAYS use validate_only=true first for import_tasks_csv. Fix validation errors, then execute with continue_on_error=true."
+      }
+    },
+
+    "workflows": [
+      {
+        "name": "Create Single Task",
+        "steps": [
+          "1. get_config(include=['dartboards', 'assignees', 'statuses']) → get valid references",
+          "2. create_task(title, dartboard, assignee, ...) → dart_id + url"
+        ],
+        "token_cost": "~600 tokens total",
+        "efficiency_tips": "Cache get_config results for 5 minutes if creating multiple tasks"
+      },
+      {
+        "name": "Bulk Update Tasks by Status",
+        "steps": [
+          "1. batch_update_tasks(selector=\"status = 'Todo' AND priority >= 4\", updates={assignee: 'duid_user1'}, dry_run=true) → preview",
+          "2. Review preview, confirm selector is correct",
+          "3. batch_update_tasks(selector=..., updates=..., dry_run=false) → batch_operation_id, successful_dart_ids, failed_items"
+        ],
+        "token_cost": "~800 tokens total (with preview)",
+        "efficiency_tips": "Use detail_level='minimal' in preview to save tokens"
+      },
+      {
+        "name": "Import Tasks from CSV",
+        "steps": [
+          "1. get_config() → get dartboard_ids, assignee_ids for reference resolution",
+          "2. import_tasks_csv(csv_file_path='tasks.csv', dartboard='duid_board1', validate_only=true) → validation_errors, preview",
+          "3. Fix CSV errors if any",
+          "4. import_tasks_csv(csv_file_path='tasks.csv', dartboard='duid_board1', validate_only=false, continue_on_error=true) → created_dart_ids, failed_items"
+        ],
+        "token_cost": "~1200 tokens total (with validation)",
+        "efficiency_tips": "Use column_mapping for flexible CSV headers. validate_only mode catches errors before API calls."
+      },
+      {
+        "name": "Search and Update Tasks",
+        "steps": [
+          "1. search_tasks(query='authentication bug', detail_level='minimal') → dart_ids",
+          "2. update_task(dart_id=dart_ids[0], updates={priority: 5, status: 'In Progress'})"
+        ],
+        "token_cost": "~400 tokens total",
+        "efficiency_tips": "Use minimal detail level when only dart_ids are needed"
+      },
+      {
+        "name": "Bulk Delete Old Completed Tasks",
+        "steps": [
+          "1. batch_delete_tasks(selector=\"status = 'Done' AND completed_at < '2025-01-01'\", dry_run=true) → preview",
+          "2. Review preview carefully",
+          "3. batch_delete_tasks(selector=..., dry_run=false, confirm=true) → deleted_dart_ids"
+        ],
+        "token_cost": "~500 tokens total",
+        "efficiency_tips": "Always use dry_run first. confirm=true required for execution."
+      },
+      {
+        "name": "Progressive Task Discovery",
+        "steps": [
+          "1. info(level='overview') → see all tool groups",
+          "2. info(level='group', target='task-query') → see search_tasks and list_tasks",
+          "3. info(level='tool', target='search_tasks') → full schema and examples",
+          "4. search_tasks(query='user feedback', limit=10) → relevant tasks"
+        ],
+        "token_cost": "~900 tokens total",
+        "efficiency_tips": "Progressive disclosure saves tokens - only fetch details when needed"
+      }
+    ],
+
+    "implementation_notes": {
+      "critical_patterns": [
+        "Accept extra parameters with warnings, don't reject unless severe issue (MCP best practice)",
+        "Use sparse tables in info tool for human readability, provide JSON arrays for automation",
+        "Progressive detail by detail_level parameter: minimal (dart_id only) → standard (common fields) → full (all fields)",
+        "ID references save massive tokens: return dart_ids from queries, accept them in updates/deletes",
+        "ALWAYS cache get_config results (5-minute TTL) - it's called frequently and changes rarely",
+        "DartQL parser should provide helpful error messages with field suggestions on typos",
+        "CSV import must handle flexible column names case-insensitively",
+        "Batch operations MUST implement dry_run mode first - prevents costly mistakes",
+        "All batch tools return batch_operation_id for tracking and debugging",
+        "Continue-on-error mode for batch operations - collect all failures, don't stop on first error",
+        "Include automation flags in all responses: has_more, total_count, complete, next_offset"
+      ],
+
+      "dartql_parser_implementation": {
+        "approach": "Tokenize WHERE clause → Parse to AST → Convert to list_tasks filter parameters",
+        "supported_syntax": "WHERE clause only (no SELECT/FROM). Operators: =, !=, >, >=, <, <=, IN, NOT IN, LIKE, CONTAINS, IS NULL, BETWEEN. Logical: AND, OR, NOT. Parentheses for grouping.",
+        "examples": [
+          "status = 'Todo' → {status: 'Todo'}",
+          "priority >= 3 AND assignee = 'duid_user1' → {priority_min: 3, assignee: 'duid_user1'}",
+          "tags CONTAINS 'urgent' → {tags: ['duid_tag_urgent']} (requires tag name → dart_id resolution)",
+          "(status IN ['Todo', 'In Progress']) AND NOT (dartboard = 'duid_board1') → complex filtering via list_tasks + client-side filter"
+        ],
+        "limitations": "Dart API may not support all filter combinations. Fall back to list_tasks(all) + client-side filtering for complex queries. Warn user about performance implications.",
+        "error_handling": "Provide clear error messages: 'Unknown field: priorty. Did you mean: priority?'. Validate field names against known schema. Suggest corrections."
+      },
+
+      "csv_import_best_practices": {
+        "column_normalization": "Strip whitespace, lowercase comparison, support aliases (Title = title = Task Name)",
+        "reference_resolution": "Dartboard column can be dart_id OR dartboard name (resolve via get_config). Assignee can be dart_id OR email (resolve via get_config). Tags can be dart_ids OR comma-separated names.",
+        "validation_phases": "1. CSV parse (syntax errors). 2. Column mapping (unknown columns warning). 3. Required fields (title must exist). 4. Reference resolution (dartboard/assignee/tags exist). 5. Data types (priority 1-5, dates valid ISO8601).",
+        "error_reporting": "Return array of {row_number, field, error, value} for all validation failures. Preview first 10 valid rows. Show summary: X valid, Y invalid.",
+        "execution_strategy": "Parallel create_task with concurrency limit (default 5). Collect successes and failures. Return created_dart_ids + failed_items with full context (row_number, row_data, error).",
+        "rollback_option": "If >50% fail, suggest rollback: batch_delete_tasks(selector=\"dart_id IN [created_ids]\"). Provide one-liner to undo."
+      },
+
+      "authentication": {
+        "method": "DART_TOKEN environment variable (format: dsa_*)",
+        "validation": "Call get_config() on server startup to validate token. Fail fast if invalid.",
+        "error_messages": "If 401: 'Invalid DART_TOKEN. Get token from https://app.dartai.com/?settings=account'. If 403: 'Insufficient permissions. Ensure token has read/write access.'"
+      },
+
+      "rate_limiting": {
+        "strategy": "Exponential backoff on 429 responses. Start with 1s delay, double each retry, max 5 retries.",
+        "batch_concurrency": "Default 5 concurrent API calls. Configurable 1-20. Higher concurrency for fast operations (get_task), lower for slow (create_task).",
+        "user_warnings": "For batch operations >100 items, warn: 'This will make ~X API calls and take approximately Y seconds.' Recommend dry_run first."
+      },
+
+      "caching": {
+        "get_config": "Cache for 5 minutes. Invalidate on manual cache_bust=true or on 401/403 responses (might indicate workspace change).",
+        "task_data": "NEVER cache. Tasks change frequently. Always fetch fresh.",
+        "batch_operation_state": "Store in-memory or Redis for get_batch_status. TTL: 1 hour after completion."
+      },
+
+      "error_handling": {
+        "api_errors": "Wrap all Dart API calls in try/catch. Map HTTP codes: 400=ValidationError, 401=AuthError, 403=PermissionError, 404=NotFoundError, 429=RateLimitError, 500=ServerError.",
+        "user_errors": "Provide actionable error messages: 'Dartboard duid_xyz not found. Use get_config() to list valid dartboards.' Include next steps.",
+        "batch_errors": "Never fail entire batch on single error (unless continue_on_error=false). Collect all errors, return detailed report."
+      },
+
+      "typescript_implementation": {
+        "project_structure": {
+          "src/index.ts": "MCP server entry point, tool registration",
+          "src/tools/": "Individual tool implementations (info.ts, get_config.ts, create_task.ts, etc.)",
+          "src/api/": "Dart API client wrapper (dartClient.ts)",
+          "src/parsers/": "DartQL parser (dartql.ts), CSV parser (csv.ts)",
+          "src/cache/": "Config cache implementation (configCache.ts)",
+          "src/batch/": "Batch operation orchestrator (batchOperations.ts, batchStore.ts)",
+          "src/types/": "TypeScript interfaces (Task, Dartboard, Config, etc.)",
+          "src/utils/": "Helper functions (fuzzyMatch.ts, validation.ts, etc.)"
+        },
+
+        "key_types": {
+          "DartTask": "interface { dart_id: string; title: string; description?: string; status?: string; priority?: number; ... }",
+          "DartConfig": "interface { assignees: DartUser[]; dartboards: DartBoard[]; statuses: DartStatus[]; ... }",
+          "DartQLExpression": "type representing parsed WHERE clause AST",
+          "BatchOperation": "interface { batch_id: string; type: 'update'|'delete'|'import'; status: 'running'|'completed'|'failed'; ... }"
+        },
+
+        "recommended_libraries": {
+          "papaparse": "CSV parsing - handles headers, type conversion, error recovery. Use { header: true, skipEmptyLines: true }",
+          "node-cache": "Simple in-memory cache with TTL. Use for get_config (TTL: 300s) and batch operation state (TTL: 3600s)",
+          "p-limit": "Concurrency control. Create limiter = pLimit(5) for batch operations, use await limiter(() => apiCall())",
+          "p-retry": "Exponential backoff. Wrap Dart API calls: await pRetry(() => dartApi.call(), { retries: 5, onFailedAttempt: handle429 })",
+          "zod": "Runtime validation. Define schemas for tool inputs: z.object({ dart_id: z.string(), ... })"
+        },
+
+        "mcp_server_setup": "Use @modelcontextprotocol/sdk Server class. Register tools with server.tool(name, schema, handler). Use server.stdio() for stdio transport or server.sse() for SSE.",
+
+        "production_safety": {
+          "dry_run_default": "For batch_delete_tasks, set dry_run default to true. Require explicit dry_run=false to execute.",
+          "confirm_required": "For batch_delete_tasks, throw error if confirm !== true when dry_run=false.",
+          "validate_first": "For import_tasks_csv, recommend validate_only=true in error message if user tries validate_only=false on first call.",
+          "rate_limit_warnings": "Warn user if batch operation will make >100 API calls. Show estimated time based on concurrency.",
+          "token_validation": "Validate DART_TOKEN format (dsa_*) and test with get_config() on server startup. Exit with clear error if invalid."
+        },
+
+        "testing_strategy": {
+          "unit_tests": "Test DartQL parser, CSV parser, fuzzy matching, column normalization in isolation. Use Jest or Vitest.",
+          "integration_tests": "Test tool handlers with mocked Dart API client. Verify input validation, error handling, response format.",
+          "production_testing": "Start with single task creation/update/delete. Test batch operations with dry_run=true. Use small CSV files (5-10 rows) for import_tasks_csv validation. Gradually increase to larger datasets.",
+          "error_scenarios": "Test with invalid dart_ids, missing DART_TOKEN, malformed CSV, invalid DartQL syntax, API errors (401, 404, 429)."
+        }
+      },
+
+      "handoff_checklist": [
+        "✓ Set up TypeScript project with @modelcontextprotocol/sdk",
+        "✓ Install dependencies: papaparse, node-cache, p-limit, p-retry, zod (optional)",
+        "✓ Create Dart API client wrapper (using dart-typescript-sdk or fetch/axios)",
+        "✓ Implement DartQL parser in TypeScript (tokenizer → AST → filters)",
+        "✓ Implement CSV parser with papaparse and flexible column mapping",
+        "✓ Implement get_config caching layer using node-cache (5-minute TTL)",
+        "✓ Implement info tool with sparse table rendering (overview/group/tool levels)",
+        "✓ Implement all 18 tools with proper TypeScript types and error handling",
+        "✓ Add rate limiting using p-retry with exponential backoff",
+        "✓ Add batch operation state store (in-memory Map or node-cache) for get_batch_status",
+        "✓ Add concurrency control using p-limit for batch operations",
+        "✓ Test with example workflows on PRODUCTION (create task, batch update, CSV import)",
+        "✓ Validate DartQL syntax edge cases (parentheses, IN clause, LIKE) with unit tests",
+        "✓ Validate CSV import with malformed data (missing columns, invalid references)",
+        "✓ Test dry_run modes for batch operations - verify no actual changes made",
+        "✓ Document DartQL syntax and CSV format in info tool responses",
+        "✓ Security audit: ensure DART_TOKEN is never logged, exposed, or sent to client",
+        "✓ Write README with TypeScript setup, DART_TOKEN configuration, examples, troubleshooting",
+        "✓ Build and bundle for distribution (tsup, esbuild, or tsc)",
+        "✓ Test in production with small datasets before large batch operations"
+      ]
+    },
+
+    "design_decisions": {
+      "why_dartql": "SQL-like syntax is familiar to most developers and agents. Provides powerful filtering without requiring complex API knowledge. Enables agent autonomy by allowing natural language → DartQL translation.",
+
+      "why_progressive_disclosure": "Reduces initial cognitive load. Agents can start with info(overview) and progressively drill down. Saves tokens by only fetching detailed schemas when needed.",
+
+      "why_dry_run_required": "Batch operations are powerful but risky. Dry run mode prevents accidental bulk deletions/updates. Forces user confirmation, reducing errors.",
+
+      "why_continue_on_error": "Real-world data is messy. CSV imports often have a few malformed rows. Failing the entire batch wastes time. Collecting all errors enables batch fixing.",
+
+      "why_batch_operation_ids": "Enables tracking, debugging, and async operation support. Future-proofs for async batch processing if needed.",
+
+      "why_flexible_csv_columns": "CSV exports from different tools use different column names. Flexible mapping improves compatibility and reduces user friction.",
+
+      "why_detail_levels": "Token efficiency. Agents often need only dart_ids for batch operations. Detail levels prevent over-fetching data.",
+
+      "why_cache_config": "get_config is called frequently (before every create/update to validate references). Workspace config changes rarely. 5-minute cache dramatically reduces API calls and latency."
+    }
+  }
+}
