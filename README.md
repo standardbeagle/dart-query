@@ -61,8 +61,16 @@ Dart AI has **no sandbox environment** - all operations are production. dart-que
 
 ### 1. Installation
 
+**Option A: Install from npm (recommended)**
+
 ```bash
-git clone https://github.com/yourusername/dart-query
+npm install -g @standardbeagle/dart-query
+```
+
+**Option B: Install from source**
+
+```bash
+git clone https://github.com/standardbeagle/dart-query
 cd dart-query
 npm install
 npm run build
@@ -74,7 +82,25 @@ Visit https://app.dartai.com/?settings=account and copy your token (starts with 
 
 ### 3. Configure MCP
 
+**Option A: Using npm global install**
+
 Add to your MCP settings (e.g., `~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "dart-query": {
+      "command": "npx",
+      "args": ["-y", "@standardbeagle/dart-query"],
+      "env": {
+        "DART_TOKEN": "dsa_your_token_here"
+      }
+    }
+  }
+}
+```
+
+**Option B: Using local installation**
 
 ```json
 {
@@ -90,9 +116,17 @@ Add to your MCP settings (e.g., `~/Library/Application Support/Claude/claude_des
 }
 ```
 
-Or use SLOP-MCP for dynamic management:
+**Option C: Using SLOP-MCP for dynamic management**
 
 ```bash
+# With npm package
+slop register dart-query \
+  --command npx \
+  --args "-y" "@standardbeagle/dart-query" \
+  --env DART_TOKEN=dsa_your_token_here \
+  --scope user
+
+# With local installation
 slop register dart-query \
   --command node \
   --args dist/index.js \

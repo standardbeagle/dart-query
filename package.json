@@ -1,29 +1,54 @@
 {
-  "name": "dart-query",
+  "name": "@standardbeagle/dart-query",
   "version": "1.0.0",
-  "description": "Advanced MCP server for Dart AI task management with progressive disclosure, batch operations, and SQL-like selectors",
+  "description": "Production-ready MCP server for Dart AI task management with batch operations, SQL-like selectors, CSV import, and zero context rot",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "dart-query": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "TOOLS.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/standardbeagle/dart-query.git"
+  },
+  "bugs": {
+    "url": "https://github.com/standardbeagle/dart-query/issues"
+  },
+  "homepage": "https://github.com/standardbeagle/dart-query#readme",
   "keywords": [
     "mcp",
     "dart",
+    "dart-ai",
+    "dartai",
     "task-management",
     "model-context-protocol",
-    "dartai"
+    "batch-operations",
+    "dartql",
+    "context-efficiency",
+    "csv-import"
   ],
-  "author": "",
+  "author": "StandardBeagle",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
     "node-cache": "^5.1.2",
