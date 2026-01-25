@@ -9,7 +9,6 @@ import {
   convertToFilters,
   DartQLTokenizer,
   DartQLLexer,
-  DartQLParser,
   TokenType,
   VALID_FIELDS,
 } from './dartql.js';

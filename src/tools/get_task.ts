@@ -110,7 +110,7 @@ async function fetchExpandedRelationships(
  * Remove relationship fields from task for compact response
  */
 function stripRelationshipFields(task: DartTask): DartTask {
-  const { subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids, ...taskWithoutRelationships } = task;
+  const { subtask_ids: _subtask_ids, blocker_ids: _blocker_ids, blocking_ids: _blocking_ids, duplicate_ids: _duplicate_ids, related_ids: _related_ids, ...taskWithoutRelationships } = task;
   return taskWithoutRelationships as DartTask;
 }
 
