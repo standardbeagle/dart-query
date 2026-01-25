@@ -13,6 +13,8 @@ import {
   DartAPIError,
   ValidationError,
   DartConfig,
+  findFolder,
+  getFolderNames,
 } from '../types/index.js';
 
 /**
@@ -109,18 +111,19 @@ export async function handleUpdateDoc(input: UpdateDocInput): Promise<UpdateDocO
         );
       }
 
-      const folderExists = config.folders.includes(input.updates.folder);
+      const folder = findFolder(config.folders, input.updates.folder);
 
-      if (!folderExists) {
-        const availableFolders = config.folders.join(', ');
+      if (!folder) {
+        const folderNames = getFolderNames(config.folders);
+        const availableFolders = folderNames.join(', ');
         throw new ValidationError(
           `Invalid folder: "${input.updates.folder}" not found in workspace. Available folders: ${availableFolders}`,
           'folder',
-          config.folders
+          folderNames
         );
       }
 
-      resolvedFolder = input.updates.folder;
+      resolvedFolder = folder.dart_id;
     } else {
       // Invalid type for folder
       throw new ValidationError(

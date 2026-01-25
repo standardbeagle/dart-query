@@ -4,6 +4,13 @@
  * Updates an existing task with partial field updates.
  * Validates all references against workspace config before API call.
  * Only sends changed fields to the API for efficiency.
+ *
+ * Supports relationship fields (subtask_ids, blocker_ids, blocking_ids,
+ * duplicate_ids, related_ids) with full replacement semantics:
+ * - Setting a relationship array replaces the entire array
+ * - Setting an empty array [] clears all relationships of that type
+ * - To add: get current values, append new ID, update with full array
+ * - To remove: get current values, filter out ID, update with full array
  */
 
 import { DartClient } from '../api/dartClient.js';
@@ -15,6 +22,12 @@ import {
   ValidationError,
   DartConfig,
   DartTask,
+  findDartboard,
+  findStatus,
+  findTag,
+  getDartboardNames,
+  getStatusNames,
+  getTagNames,
 } from '../types/index.js';
 
 /**
@@ -27,14 +40,16 @@ import {
  * 4. Validate all reference fields (dartboard, status, assignees, tags)
  * 5. Resolve names to dart_ids for all reference fields
  * 6. Validate priority, size, and date formats
- * 7. Call DartClient.updateTask() with only changed fields
- * 8. Generate deep link URL
- * 9. Return UpdateTaskOutput with updated_fields list
+ * 7. Validate relationship fields (subtask_ids, blocker_ids, blocking_ids,
+ *    duplicate_ids, related_ids) - must be arrays of valid dart_id strings
+ * 8. Call DartClient.updateTask() with only changed fields
+ * 9. Generate deep link URL
+ * 10. Return UpdateTaskOutput with updated_fields list (includes relationship fields)
  *
  * @param input - UpdateTaskInput with dart_id and updates object
- * @returns UpdateTaskOutput with dart_id, updated_fields, task, url
+ * @returns UpdateTaskOutput with dart_id, updated_fields, task (with relationship fields), url
  * @throws DartAPIError with 404 if task not found
- * @throws ValidationError if any reference is invalid
+ * @throws ValidationError if any reference or relationship field is invalid
  */
 export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTaskOutput> {
   const DART_TOKEN = process.env.DART_TOKEN;
@@ -137,19 +152,20 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    const dartboardExists = config.dartboards.includes(input.updates.dartboard!);
+    const dartboard = findDartboard(config.dartboards, input.updates.dartboard!);
 
-    if (!dartboardExists) {
-      const availableDartboards = config.dartboards.slice(0, 10).join(', ') +
-        (config.dartboards.length > 10 ? `, ... (${config.dartboards.length - 10} more)` : '');
+    if (!dartboard) {
+      const dartboardNames = getDartboardNames(config.dartboards);
+      const availableDartboards = dartboardNames.slice(0, 10).join(', ') +
+        (dartboardNames.length > 10 ? `, ... (${dartboardNames.length - 10} more)` : '');
       throw new ValidationError(
         `Invalid dartboard: "${input.updates.dartboard}" not found in workspace. Available dartboards: ${availableDartboards}`,
         'dartboard',
-        config.dartboards
+        dartboardNames
       );
     }
 
-    resolvedUpdates.dartboard = input.updates.dartboard;
+    resolvedUpdates.dartboard = dartboard.dart_id;
   }
 
   // ============================================================================
@@ -163,18 +179,19 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    const statusExists = config.statuses.includes(input.updates.status!);
+    const status = findStatus(config.statuses, input.updates.status!);
 
-    if (!statusExists) {
-      const availableStatuses = config.statuses.join(', ');
+    if (!status) {
+      const statusNames = getStatusNames(config.statuses);
+      const availableStatuses = statusNames.join(', ');
       throw new ValidationError(
         `Invalid status: "${input.updates.status}" not found in workspace. Available statuses: ${availableStatuses}`,
         'status',
-        config.statuses
+        statusNames
       );
     }
 
-    resolvedUpdates.status = input.updates.status;
+    resolvedUpdates.status = status.dart_id;
   }
 
   // ============================================================================
@@ -262,35 +279,36 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       }
 
       const invalidTags: string[] = [];
+      const resolvedTags: string[] = [];
 
-      for (const tagId of input.updates.tags) {
+      for (const tagInput of input.updates.tags) {
         // Validate that each element is a string
-        if (typeof tagId !== 'string') {
+        if (typeof tagInput !== 'string') {
           throw new ValidationError(
-            `tags array must contain only strings, found: ${typeof tagId}`,
+            `tags array must contain only strings, found: ${typeof tagInput}`,
             'tags'
           );
         }
 
-        const tagExists = config.tags.includes(tagId);
+        const tag = findTag(config.tags, tagInput);
 
-        if (!tagExists) {
-          invalidTags.push(tagId);
+        if (!tag) {
+          invalidTags.push(tagInput);
+        } else {
+          resolvedTags.push(tag.dart_id);
         }
       }
 
       if (invalidTags.length > 0) {
-        const availableTags = config.tags.slice(0, 20).join(', ') +
-          (config.tags.length > 20 ? `, ... (${config.tags.length - 20} more)` : '');
+        const tagNames = getTagNames(config.tags);
+        const availableTags = tagNames.slice(0, 20).join(', ') +
+          (tagNames.length > 20 ? `, ... (${tagNames.length - 20} more)` : '');
         throw new ValidationError(
           `Invalid tag(s): ${invalidTags.join(', ')} not found in workspace. Available tags: ${availableTags}`,
           'tags',
-          config.tags
+          tagNames
         );
       }
-
-      // Tags are already strings, no resolution needed
-      const resolvedTags = input.updates.tags;
 
       resolvedUpdates.tags = resolvedTags;
     } else {
@@ -376,6 +394,83 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
 
   if (input.updates.parent_task !== undefined) {
     resolvedUpdates.parent_task = input.updates.parent_task;
+  }
+
+  // ============================================================================
+  // Step 12a: Validate and resolve relationship fields
+  // All relationship fields are string arrays with full replacement semantics
+  // Empty array [] clears all relationships of that type
+  // ============================================================================
+
+  // Helper function to validate relationship array
+  const validateRelationshipArray = (
+    fieldName: string,
+    value: unknown
+  ): string[] | undefined => {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (!Array.isArray(value)) {
+      throw new ValidationError(
+        `${fieldName} must be an array of task dart_ids`,
+        fieldName
+      );
+    }
+
+    // Empty array is valid - it clears all relationships
+    if (value.length === 0) {
+      return [];
+    }
+
+    // Validate each element is a non-empty string
+    for (let i = 0; i < value.length; i++) {
+      const item = value[i];
+      if (typeof item !== 'string') {
+        throw new ValidationError(
+          `${fieldName}[${i}] must be a string, found: ${typeof item}`,
+          fieldName
+        );
+      }
+      if (item.trim() === '') {
+        throw new ValidationError(
+          `${fieldName}[${i}] must be a non-empty string`,
+          fieldName
+        );
+      }
+    }
+
+    return value as string[];
+  };
+
+  // Validate and resolve subtask_ids
+  const subtaskIds = validateRelationshipArray('subtask_ids', input.updates.subtask_ids);
+  if (subtaskIds !== undefined) {
+    resolvedUpdates.subtask_ids = subtaskIds;
+  }
+
+  // Validate and resolve blocker_ids
+  const blockerIds = validateRelationshipArray('blocker_ids', input.updates.blocker_ids);
+  if (blockerIds !== undefined) {
+    resolvedUpdates.blocker_ids = blockerIds;
+  }
+
+  // Validate and resolve blocking_ids
+  const blockingIds = validateRelationshipArray('blocking_ids', input.updates.blocking_ids);
+  if (blockingIds !== undefined) {
+    resolvedUpdates.blocking_ids = blockingIds;
+  }
+
+  // Validate and resolve duplicate_ids
+  const duplicateIds = validateRelationshipArray('duplicate_ids', input.updates.duplicate_ids);
+  if (duplicateIds !== undefined) {
+    resolvedUpdates.duplicate_ids = duplicateIds;
+  }
+
+  // Validate and resolve related_ids
+  const relatedIds = validateRelationshipArray('related_ids', input.updates.related_ids);
+  if (relatedIds !== undefined) {
+    resolvedUpdates.related_ids = relatedIds;
   }
 
   // ============================================================================

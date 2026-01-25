@@ -30,6 +30,8 @@ import {
   ValidationError,
   DartConfig,
   CreateTaskInput,
+  findDartboard,
+  getDartboardNames,
 } from '../types/index.js';
 
 /**
@@ -157,19 +159,20 @@ export async function handleImportTasksCSV(
   }
 
   // Validate dartboard exists
-  const dartboardExists = config.dartboards.includes(input.dartboard);
+  const dartboard = findDartboard(config.dartboards, input.dartboard);
 
-  if (!dartboardExists) {
-    const availableDartboards = config.dartboards.slice(0, 10).join(', ') +
-      (config.dartboards.length > 10 ? `, ... (${config.dartboards.length - 10} more)` : '');
+  if (!dartboard) {
+    const dartboardNames = getDartboardNames(config.dartboards);
+    const availableDartboards = dartboardNames.slice(0, 10).join(', ') +
+      (dartboardNames.length > 10 ? `, ... (${dartboardNames.length - 10} more)` : '');
     throw new ValidationError(
       `Invalid dartboard: "${input.dartboard}" not found in workspace. Available dartboards: ${availableDartboards}`,
       'dartboard',
-      config.dartboards
+      dartboardNames
     );
   }
 
-  const dartboardId = input.dartboard;
+  const dartboardId = dartboard.dart_id;
 
   // ============================================================================
   // Phase 4: Validate ALL rows - collect errors for all rows
@@ -245,6 +248,13 @@ export async function handleImportTasksCSV(
         tags: item.data.tags as string[] | undefined,
         due_at: item.data.due_at as string | undefined,
         start_at: item.data.start_at as string | undefined,
+        parent_task: item.data.parent_task as string | undefined,
+        // Relationship fields
+        subtask_ids: item.data.subtask_ids as string[] | undefined,
+        blocker_ids: item.data.blocker_ids as string[] | undefined,
+        blocking_ids: item.data.blocking_ids as string[] | undefined,
+        duplicate_ids: item.data.duplicate_ids as string[] | undefined,
+        related_ids: item.data.related_ids as string[] | undefined,
       },
     }));
 
@@ -311,6 +321,12 @@ export async function handleImportTasksCSV(
           due_at: item.data.due_at as string | undefined,
           start_at: item.data.start_at as string | undefined,
           parent_task: item.data.parent_task as string | undefined,
+          // Relationship fields (parsed arrays from CSV)
+          subtask_ids: item.data.subtask_ids as string[] | undefined,
+          blocker_ids: item.data.blocker_ids as string[] | undefined,
+          blocking_ids: item.data.blocking_ids as string[] | undefined,
+          duplicate_ids: item.data.duplicate_ids as string[] | undefined,
+          related_ids: item.data.related_ids as string[] | undefined,
         };
 
         // Create task via API

@@ -78,6 +78,12 @@ export const VALID_FIELDS = [
   'completed_at',
   'parent_task',
   'dart_id',
+  // Relationship fields (array of task IDs except parent_task which is string|undefined)
+  'subtask_ids',
+  'blocker_ids',
+  'blocking_ids',
+  'duplicate_ids',
+  'related_ids',
 ] as const;
 
 export type ValidField = typeof VALID_FIELDS[number];
@@ -1162,7 +1168,9 @@ function extractAPIFilters(expr: DartQLExpression): Partial<ListTasksInput> {
     } else if (field === 'dartboard' && operator === '=') {
       filters.dartboard = value != null ? String(value) : '';
     } else if (field === 'priority' && operator === '=') {
-      filters.priority = value != null ? String(value) : '';
+      // Priority should be a number; convert to number or 0 if invalid
+      const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+      filters.priority = isNaN(numValue) ? 0 : numValue;
     } else if (field === 'tags' && operator === '=') {
       // Single tag - convert to array
       filters.tags = value != null ? [String(value)] : [];
@@ -1285,9 +1293,17 @@ function evaluateExpression(expr: DartQLExpression, task: unknown): boolean {
         return false;
 
       case 'IS NULL':
+        // For arrays (like relationship fields), empty array counts as null
+        if (Array.isArray(taskValue)) {
+          return taskValue.length === 0;
+        }
         return taskValue === null || taskValue === undefined;
 
       case 'IS NOT NULL':
+        // For arrays (like relationship fields), must be non-empty array
+        if (Array.isArray(taskValue)) {
+          return taskValue.length > 0;
+        }
         return taskValue !== null && taskValue !== undefined;
 
       case 'BETWEEN':

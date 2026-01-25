@@ -13,6 +13,12 @@ import {
   DartAPIError,
   ValidationError,
   DartConfig,
+  findDartboard,
+  findTag,
+  findStatus,
+  getDartboardNames,
+  getTagNames,
+  getStatusNames,
 } from '../types/index.js';
 
 /**
@@ -25,12 +31,16 @@ import {
  * 4. Validate assignees exist (if provided)
  * 5. Validate tags exist (if provided)
  * 6. Validate status exists (if provided)
- * 7. Call DartClient.createTask()
- * 8. Generate deep link URL
- * 9. Return CreateTaskOutput
+ * 7. Validate priority (if provided)
+ * 8. Validate size (if provided)
+ * 9. Validate relationship fields format (subtask_ids, blocker_ids, etc.)
+ * 10. Validate dates (if provided)
+ * 11. Call DartClient.createTask()
+ * 12. Map API response
+ * 13. Return CreateTaskOutput
  *
- * @param input - CreateTaskInput with task details
- * @returns CreateTaskOutput with dart_id, title, url, created_at, all_fields
+ * @param input - CreateTaskInput with task details and optional relationship arrays
+ * @returns CreateTaskOutput with dart_id, title, url, created_at, all_fields (includes relationships)
  */
 export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTaskOutput> {
   const DART_TOKEN = process.env.DART_TOKEN;
@@ -95,15 +105,16 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
     );
   }
 
-  const dartboardExists = config.dartboards.includes(input.dartboard);
+  const dartboard = findDartboard(config.dartboards, input.dartboard);
 
-  if (!dartboardExists) {
-    const availableDartboards = config.dartboards.slice(0, 10).join(', ') +
-      (config.dartboards.length > 10 ? `, ... (${config.dartboards.length - 10} more)` : '');
+  if (!dartboard) {
+    const dartboardNames = getDartboardNames(config.dartboards);
+    const availableDartboards = dartboardNames.slice(0, 10).join(', ') +
+      (dartboardNames.length > 10 ? `, ... (${dartboardNames.length - 10} more)` : '');
     throw new ValidationError(
       `Invalid dartboard: "${input.dartboard}" not found in workspace. Available dartboards: ${availableDartboards}`,
       'dartboard',
-      config.dartboards
+      dartboardNames
     );
   }
 
@@ -141,19 +152,20 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   if (input.tags && Array.isArray(input.tags) && input.tags.length > 0) {
     const invalidTags: string[] = [];
 
-    for (const tag of input.tags) {
-      if (!config.tags.includes(tag)) {
-        invalidTags.push(tag);
+    for (const tagInput of input.tags) {
+      if (!findTag(config.tags, tagInput)) {
+        invalidTags.push(tagInput);
       }
     }
 
     if (invalidTags.length > 0) {
-      const availableTags = config.tags.slice(0, 20).join(', ') +
-        (config.tags.length > 20 ? `, ... (${config.tags.length - 20} more)` : '');
+      const tagNames = getTagNames(config.tags);
+      const availableTags = tagNames.slice(0, 20).join(', ') +
+        (tagNames.length > 20 ? `, ... (${tagNames.length - 20} more)` : '');
       throw new ValidationError(
         `Invalid tag(s): ${invalidTags.join(', ')} not found in workspace. Available tags: ${availableTags}`,
         'tags',
-        config.tags
+        tagNames
       );
     }
   }
@@ -162,12 +174,13 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   // Step 6: Validate status (if provided)
   // ============================================================================
   if (input.status && typeof input.status === 'string') {
-    if (!config.statuses.includes(input.status)) {
-      const availableStatuses = config.statuses.join(', ');
+    if (!findStatus(config.statuses, input.status)) {
+      const statusNames = getStatusNames(config.statuses);
+      const availableStatuses = statusNames.join(', ');
       throw new ValidationError(
         `Invalid status: "${input.status}" not found in workspace. Available statuses: ${availableStatuses}`,
         'status',
-        config.statuses
+        statusNames
       );
     }
   }
@@ -189,7 +202,48 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   }
 
   // ============================================================================
-  // Step 9: Validate dates (if provided)
+  // Step 9: Validate relationship fields (format check only, not existence)
+  // ============================================================================
+  /**
+   * Validates that a dart_id is in a valid format.
+   * dart_ids are typically alphanumeric strings, but we only validate
+   * that they are non-empty strings (format-only, not existence).
+   */
+  const validateDartIdFormat = (id: string): boolean => {
+    // dart_ids must be non-empty strings
+    return typeof id === 'string' && id.trim().length > 0;
+  };
+
+  const validateRelationshipIds = (ids: string[] | undefined, fieldName: string): void => {
+    if (!ids || !Array.isArray(ids)) {
+      return; // Field is optional
+    }
+
+    const invalidIds: string[] = [];
+
+    for (const id of ids) {
+      if (!validateDartIdFormat(id)) {
+        invalidIds.push(id === '' ? '(empty string)' : String(id));
+      }
+    }
+
+    if (invalidIds.length > 0) {
+      throw new ValidationError(
+        `Invalid dart_id format in ${fieldName}: ${invalidIds.join(', ')}. Each ID must be a non-empty string.`,
+        fieldName
+      );
+    }
+  };
+
+  // Validate all relationship fields
+  validateRelationshipIds(input.subtask_ids, 'subtask_ids');
+  validateRelationshipIds(input.blocker_ids, 'blocker_ids');
+  validateRelationshipIds(input.blocking_ids, 'blocking_ids');
+  validateRelationshipIds(input.duplicate_ids, 'duplicate_ids');
+  validateRelationshipIds(input.related_ids, 'related_ids');
+
+  // ============================================================================
+  // Step 10: Validate dates (if provided)
   // ============================================================================
   const validateDate = (dateStr: string, fieldName: string) => {
     try {
@@ -217,7 +271,7 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   }
 
   // ============================================================================
-  // Step 10: Create task via API
+  // Step 11: Create task via API
   // ============================================================================
   const client = new DartClient({ token: DART_TOKEN });
 
@@ -236,7 +290,7 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   }
 
   // ============================================================================
-  // Step 11: Map API response (API returns 'id' but we use 'dart_id')
+  // Step 12: Map API response (API returns 'id' but we use 'dart_id')
   // ============================================================================
   const taskWithDartId = {
     ...createdTask,
@@ -248,7 +302,7 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   const url = (createdTask as any).htmlUrl || `https://app.dartai.com/task/${taskWithDartId.dart_id}`;
 
   // ============================================================================
-  // Step 12: Return CreateTaskOutput
+  // Step 13: Return CreateTaskOutput
   // ============================================================================
   return {
     dart_id: taskWithDartId.dart_id,

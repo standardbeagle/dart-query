@@ -13,6 +13,8 @@ import {
   ValidationError,
   SearchTasksInput,
   SearchTasksOutput,
+  findDartboard,
+  getDartboardNames,
 } from '../types/index.js';
 
 /**
@@ -205,19 +207,17 @@ async function resolveDartboard(dartboard: string, client: DartClient): Promise<
     );
   }
 
-  const matchedDartboard = config.dartboards.find(
-    (d) => d.toLowerCase() === dartboardInput.toLowerCase()
-  );
+  const matchedDartboard = findDartboard(config.dartboards, dartboardInput);
 
   if (!matchedDartboard) {
     throw new ValidationError(
       `Dartboard not found: "${dartboardInput}". Use get_config to see available dartboards.`,
       'dartboard',
-      config.dartboards.slice(0, 10)
+      getDartboardNames(config.dartboards).slice(0, 10)
     );
   }
 
-  return matchedDartboard;
+  return matchedDartboard.dart_id;
 }
 
 /**

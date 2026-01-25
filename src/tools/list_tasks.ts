@@ -13,6 +13,12 @@ import {
   DartTask,
   DartAPIError,
   ValidationError,
+  findStatus,
+  findDartboard,
+  findTag,
+  getStatusNames,
+  getDartboardNames,
+  getTagNames,
 } from '../types/index.js';
 
 /**
@@ -249,21 +255,18 @@ async function resolveFilters(
       );
     }
 
-    const statusExists = config.statuses.some(
-      (s) => s.toLowerCase() === statusInput.toLowerCase()
-    );
+    const status = findStatus(config.statuses, statusInput);
 
-    if (!statusExists) {
+    if (!status) {
       throw new ValidationError(
         `Status not found: "${statusInput}". Use get_config to see available statuses.`,
         'status',
-        config.statuses
+        getStatusNames(config.statuses)
       );
     }
 
-    // Find exact case match
-    const status = config.statuses.find((s) => s.toLowerCase() === statusInput.toLowerCase());
-    resolved.status = status!;
+    // Return dart_id for API filtering
+    resolved.status = status.dart_id;
   }
 
   // Resolve dartboard (dart_id or name)
@@ -279,21 +282,18 @@ async function resolveFilters(
       );
     }
 
-    const dartboardExists = config.dartboards.some(
-      (d) => d.toLowerCase() === dartboardInput.toLowerCase()
-    );
+    const dartboard = findDartboard(config.dartboards, dartboardInput);
 
-    if (!dartboardExists) {
+    if (!dartboard) {
       throw new ValidationError(
         `Dartboard not found: "${dartboardInput}". Use get_config to see available dartboards.`,
         'dartboard',
-        config.dartboards.slice(0, 10)
+        getDartboardNames(config.dartboards).slice(0, 10)
       );
     }
 
-    // Find exact case match
-    const dartboard = config.dartboards.find((d) => d.toLowerCase() === dartboardInput.toLowerCase());
-    resolved.dartboard = dartboard!;
+    // Return dart_id for API filtering
+    resolved.dartboard = dartboard.dart_id;
   }
 
   // Resolve tags (dart_ids or names)
@@ -318,21 +318,18 @@ async function resolveFilters(
         );
       }
 
-      const tagExists = config.tags.some(
-        (t) => t.toLowerCase() === tagInput.toLowerCase()
-      );
+      const tag = findTag(config.tags, tagInput);
 
-      if (!tagExists) {
+      if (!tag) {
         throw new ValidationError(
           `Tag not found: "${tagInput}". Use get_config to see available tags.`,
           'tags',
-          config.tags.slice(0, 20)
+          getTagNames(config.tags).slice(0, 20)
         );
       }
 
-      // Find exact case match
-      const tag = config.tags.find((t) => t.toLowerCase() === tagInput.toLowerCase());
-      resolvedTags.push(tag!);
+      // Return dart_id for API filtering
+      resolvedTags.push(tag.dart_id);
     }
 
     resolved.tags = resolvedTags;
@@ -367,7 +364,51 @@ async function resolveFilters(
     }
   }
 
+  // Validate relationship filters
+  validateRelationshipFilters(input);
+
   return resolved;
+}
+
+/**
+ * Validate relationship filter parameters
+ */
+function validateRelationshipFilters(input: ListTasksInput): void {
+  // Validate boolean filters
+  if (input.has_parent !== undefined && typeof input.has_parent !== 'boolean') {
+    throw new ValidationError('has_parent must be a boolean', 'has_parent');
+  }
+
+  if (input.has_subtasks !== undefined && typeof input.has_subtasks !== 'boolean') {
+    throw new ValidationError('has_subtasks must be a boolean', 'has_subtasks');
+  }
+
+  if (input.has_blockers !== undefined && typeof input.has_blockers !== 'boolean') {
+    throw new ValidationError('has_blockers must be a boolean', 'has_blockers');
+  }
+
+  if (input.is_blocking !== undefined && typeof input.is_blocking !== 'boolean') {
+    throw new ValidationError('is_blocking must be a boolean', 'is_blocking');
+  }
+
+  // Validate dart_id filters (blocked_by and blocking)
+  if (input.blocked_by !== undefined) {
+    if (typeof input.blocked_by !== 'string') {
+      throw new ValidationError('blocked_by must be a string (dart_id)', 'blocked_by');
+    }
+    if (input.blocked_by.trim() === '') {
+      throw new ValidationError('blocked_by cannot be an empty string', 'blocked_by');
+    }
+  }
+
+  if (input.blocking !== undefined) {
+    if (typeof input.blocking !== 'string') {
+      throw new ValidationError('blocking must be a string (dart_id)', 'blocking');
+    }
+    if (input.blocking.trim() === '') {
+      throw new ValidationError('blocking cannot be an empty string', 'blocking');
+    }
+  }
 }
 
 /**
@@ -384,17 +425,83 @@ function isValidISO8601Date(dateString: string): boolean {
 }
 
 /**
- * Apply client-side filtering fallback
- * (If API doesn't support certain filters, we filter client-side)
+ * Check if relationship filters are being used (require client-side filtering)
  */
-function applyClientSideFilters(tasks: DartTask[], _input: ListTasksInput): DartTask[] {
-  // Note: Most filtering should happen at the API level
-  // This is a fallback for filters that might not be supported by the API
+function hasRelationshipFilters(input: ListTasksInput): boolean {
+  return (
+    input.has_parent !== undefined ||
+    input.has_subtasks !== undefined ||
+    input.has_blockers !== undefined ||
+    input.is_blocking !== undefined ||
+    input.blocked_by !== undefined ||
+    input.blocking !== undefined
+  );
+}
 
-  // For now, assume API handles all filters
-  // Future: Add client-side filtering logic here if needed
+/**
+ * Apply client-side filtering for relationship filters.
+ *
+ * Performance note: Relationship filters require client-side processing because
+ * the Dart API does not support filtering by relationship arrays. For large task
+ * counts, this may be slower than API-level filtering.
+ */
+function applyClientSideFilters(tasks: DartTask[], input: ListTasksInput): DartTask[] {
+  // If no relationship filters, return as-is (API handles other filters)
+  if (!hasRelationshipFilters(input)) {
+    return tasks;
+  }
 
-  return tasks;
+  return tasks.filter((task) => {
+    // has_parent filter: tasks with or without a parent task
+    if (input.has_parent !== undefined) {
+      const hasParent = task.parent_task !== undefined && task.parent_task !== null && task.parent_task !== '';
+      if (input.has_parent !== hasParent) {
+        return false;
+      }
+    }
+
+    // has_subtasks filter: tasks with or without subtasks
+    if (input.has_subtasks !== undefined) {
+      const hasSubtasks = Array.isArray(task.subtask_ids) && task.subtask_ids.length > 0;
+      if (input.has_subtasks !== hasSubtasks) {
+        return false;
+      }
+    }
+
+    // has_blockers filter: tasks that are blocked or not blocked
+    if (input.has_blockers !== undefined) {
+      const hasBlockers = Array.isArray(task.blocker_ids) && task.blocker_ids.length > 0;
+      if (input.has_blockers !== hasBlockers) {
+        return false;
+      }
+    }
+
+    // is_blocking filter: tasks that block other tasks or not
+    if (input.is_blocking !== undefined) {
+      const isBlocking = Array.isArray(task.blocking_ids) && task.blocking_ids.length > 0;
+      if (input.is_blocking !== isBlocking) {
+        return false;
+      }
+    }
+
+    // blocked_by filter: tasks blocked by a specific task
+    if (input.blocked_by !== undefined) {
+      const blockerIds = task.blocker_ids || [];
+      if (!blockerIds.includes(input.blocked_by)) {
+        return false;
+      }
+    }
+
+    // blocking filter: tasks that are blocking a specific task
+    if (input.blocking !== undefined) {
+      const blockingIds = task.blocking_ids || [];
+      if (!blockingIds.includes(input.blocking)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 }
 
 /**
@@ -453,10 +560,23 @@ function buildFiltersApplied(
   if (resolved.due_before) filtersApplied.due_before = resolved.due_before;
   if (resolved.due_after) filtersApplied.due_after = resolved.due_after;
 
+  // Echo back relationship filters (client-side filters)
+  if (input.has_parent !== undefined) filtersApplied.has_parent = input.has_parent;
+  if (input.has_subtasks !== undefined) filtersApplied.has_subtasks = input.has_subtasks;
+  if (input.has_blockers !== undefined) filtersApplied.has_blockers = input.has_blockers;
+  if (input.is_blocking !== undefined) filtersApplied.is_blocking = input.is_blocking;
+  if (input.blocked_by !== undefined) filtersApplied.blocked_by = input.blocked_by;
+  if (input.blocking !== undefined) filtersApplied.blocking = input.blocking;
+
   // Include pagination info (using actual validated values, not defaults from input)
   filtersApplied.limit = input.limit !== undefined ? input.limit : 50;
   filtersApplied.offset = input.offset !== undefined ? input.offset : 0;
   filtersApplied.detail_level = input.detail_level || 'standard';
+
+  // Flag indicating client-side filtering was used
+  if (hasRelationshipFilters(input)) {
+    filtersApplied.client_side_filtered = true;
+  }
 
   return filtersApplied;
 }

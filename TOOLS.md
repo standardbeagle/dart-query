@@ -177,6 +177,13 @@ get_config({ cache_bust: true })
   due_at?: string                  // ISO8601 date (e.g., "2026-02-01T00:00:00Z")
   start_at?: string                // ISO8601 date
   parent_task?: string             // parent task dart_id
+
+  // Relationship fields (arrays of dart_id strings)
+  subtask_ids?: string[]           // IDs of subtask (child) tasks
+  blocker_ids?: string[]           // IDs of tasks that block this task
+  blocking_ids?: string[]          // IDs of tasks blocked by this task
+  duplicate_ids?: string[]         // IDs of duplicate tasks
+  related_ids?: string[]           // IDs of related tasks
 }
 ```
 
@@ -199,6 +206,13 @@ get_config({ cache_bust: true })
   updated_at: string
   parent_task?: string
   url?: string                     // web UI link
+
+  // Relationship fields
+  subtask_ids?: string[]           // IDs of subtask (child) tasks
+  blocker_ids?: string[]           // IDs of tasks that block this task
+  blocking_ids?: string[]          // IDs of tasks blocked by this task
+  duplicate_ids?: string[]         // IDs of duplicate tasks
+  related_ids?: string[]           // IDs of related tasks
 }
 ```
 
@@ -223,6 +237,22 @@ create_task({
   tags: ["feature", "auth"],
   due_at: "2026-02-15T00:00:00Z"
 })
+
+// Task with relationships - creating a task that is blocked by another
+create_task({
+  title: "Deploy OAuth2 to production",
+  dartboard: "Engineering/backend",
+  priority: "high",
+  blocker_ids: ["duid_oauth_impl"]   // blocked by the OAuth implementation task
+})
+
+// Task with multiple relationships
+create_task({
+  title: "Update user documentation",
+  dartboard: "Documentation",
+  related_ids: ["duid_oauth_impl", "duid_api_docs"],
+  blocking_ids: ["duid_release_v2"]  // this task blocks the v2 release
+})
 ```
 
 **Errors:**
@@ -242,22 +272,94 @@ create_task({
 {
   dart_id: string                  // REQUIRED
   detail_level?: 'minimal' | 'standard' | 'full'  // default: 'standard'
+  include_relationships?: boolean  // default: true, include relationship data
+  expand_relationships?: boolean   // default: false, include titles of related tasks
 }
 ```
 
-**Output Schema:** Same as `create_task` output
+**Output Schema:**
+```typescript
+{
+  // Core task fields (same as create_task output)
+  dart_id: string
+  title: string
+  description?: string
+  status?: string
+  priority?: string
+  size?: string
+  assignees?: string[]
+  tags?: string[]
+  dartboard: string
+  due_at?: string
+  start_at?: string
+  completed_at?: string
+  created_at: string
+  updated_at: string
+  parent_task?: string
+  url?: string
+
+  // Relationship IDs (when include_relationships=true)
+  subtask_ids?: string[]
+  blocker_ids?: string[]
+  blocking_ids?: string[]
+  duplicate_ids?: string[]
+  related_ids?: string[]
+
+  // Relationship counts (always included when include_relationships=true)
+  relationship_counts?: {
+    subtasks: number
+    blockers: number
+    blocking: number
+    duplicates: number
+    related: number
+  }
+
+  // Expanded relationships (when expand_relationships=true)
+  expanded_relationships?: {
+    subtasks?: Array<{ dart_id: string, title: string }>
+    blockers?: Array<{ dart_id: string, title: string }>
+    blocking?: Array<{ dart_id: string, title: string }>
+    duplicates?: Array<{ dart_id: string, title: string }>
+    related?: Array<{ dart_id: string, title: string }>
+  }
+}
+```
 
 **Examples:**
 
 ```typescript
-// Get full task details
+// Get full task details with relationships
 get_task({ dart_id: "duid_task123" })
+// Returns:
+// {
+//   dart_id: "duid_task123",
+//   title: "Implement OAuth2",
+//   blocker_ids: ["duid_design_review"],
+//   blocking_ids: ["duid_deploy_prod"],
+//   relationship_counts: { subtasks: 0, blockers: 1, blocking: 1, duplicates: 0, related: 0 }
+// }
 
 // Get minimal details (fewer tokens)
 get_task({ dart_id: "duid_task123", detail_level: "minimal" })
+
+// Exclude relationship data for smaller response
+get_task({ dart_id: "duid_task123", include_relationships: false })
+
+// Get expanded relationships with task titles (useful for display)
+get_task({ dart_id: "duid_task123", expand_relationships: true })
+// Returns:
+// {
+//   dart_id: "duid_task123",
+//   title: "Implement OAuth2",
+//   blocker_ids: ["duid_design_review"],
+//   expanded_relationships: {
+//     blockers: [{ dart_id: "duid_design_review", title: "Design review meeting" }],
+//     blocking: [{ dart_id: "duid_deploy_prod", title: "Deploy to production" }]
+//   }
+// }
 ```
 
-**Token Budget:** ~200 tokens (minimal), ~300 tokens (standard)
+**Token Budget:** ~200 tokens (minimal), ~300 tokens (standard), ~400+ tokens (with expanded relationships)
 
 ---
 
@@ -281,9 +383,21 @@ get_task({ dart_id: "duid_task123", detail_level: "minimal" })
     due_at?: string
     start_at?: string
     parent_task?: string
+
+    // Relationship fields (arrays of dart_id strings)
+    subtask_ids?: string[]         // IDs of subtask (child) tasks
+    blocker_ids?: string[]         // IDs of tasks that block this task
+    blocking_ids?: string[]        // IDs of tasks blocked by this task
+    duplicate_ids?: string[]       // IDs of duplicate tasks
+    related_ids?: string[]         // IDs of related tasks
   }
 }
 ```
+
+**Relationship Update Semantics:**
+- **Full replacement**: Providing a relationship array replaces ALL existing values
+- **Empty array `[]`**: Clears all relationships of that type
+- **Omitting field**: Leaves existing relationships unchanged
 
 **Output Schema:** Same as `get_task` (updated task)
 
@@ -305,7 +419,49 @@ update_task({
     assignees: ["john@company.com"]
   }
 })
+
+// Add blockers to a task (replaces any existing blockers)
+update_task({
+  dart_id: "duid_deploy_task",
+  updates: {
+    blocker_ids: ["duid_testing", "duid_code_review"]
+  }
+})
+
+// Clear all blockers (task is no longer blocked)
+update_task({
+  dart_id: "duid_deploy_task",
+  updates: {
+    blocker_ids: []  // empty array clears all blockers
+  }
+})
+
+// Link related tasks
+update_task({
+  dart_id: "duid_task123",
+  updates: {
+    related_ids: ["duid_task456", "duid_task789"]
+  }
+})
+
+// Mark tasks as duplicates
+update_task({
+  dart_id: "duid_original",
+  updates: {
+    duplicate_ids: ["duid_dup1", "duid_dup2"]
+  }
+})
+
+// Add subtasks to a parent task
+update_task({
+  dart_id: "duid_parent_feature",
+  updates: {
+    subtask_ids: ["duid_subtask1", "duid_subtask2", "duid_subtask3"]
+  }
+})
 ```
+
+**Important:** To add a single relationship without losing existing ones, first retrieve the current task with `get_task`, then include all existing IDs plus the new one in the update.
 
 ---
 
@@ -376,7 +532,7 @@ add_task_comment({
 
 ### `list_tasks` - Filter and List Tasks
 
-**Purpose:** List tasks with optional filtering by assignee, status, dartboard, priority, tags, and due dates.
+**Purpose:** List tasks with optional filtering by assignee, status, dartboard, priority, tags, due dates, and relationships.
 
 **Input Schema:**
 ```typescript
@@ -391,13 +547,21 @@ add_task_comment({
   limit?: number                   // max results, default 100
   offset?: number                  // pagination offset, default 0
   detail_level?: 'minimal' | 'standard' | 'full'  // default: 'standard'
+
+  // Relationship filters
+  has_parent?: boolean             // filter tasks that have/don't have a parent
+  has_subtasks?: boolean           // filter tasks that have/don't have subtasks
+  has_blockers?: boolean           // filter tasks that are/aren't blocked
+  is_blocking?: boolean            // filter tasks that are/aren't blocking others
+  blocked_by?: string              // filter tasks blocked by specific dart_id
+  blocking?: string                // filter tasks blocking specific dart_id
 }
 ```
 
 **Output Schema:**
 ```typescript
 {
-  tasks: DartTask[]                // array of task objects
+  tasks: DartTask[]                // array of task objects (includes relationship fields)
   total: number                    // total matching tasks
 }
 ```
@@ -427,7 +591,47 @@ list_tasks({
 
 // Pagination (get next 100 tasks)
 list_tasks({ limit: 100, offset: 100 })
+
+// List all blocked tasks (tasks that have blockers)
+list_tasks({
+  has_blockers: true
+})
+
+// List all tasks that are blocking other tasks
+list_tasks({
+  is_blocking: true
+})
+
+// List parent tasks only (tasks that have subtasks)
+list_tasks({
+  has_subtasks: true
+})
+
+// List leaf tasks only (tasks without subtasks)
+list_tasks({
+  has_subtasks: false
+})
+
+// List tasks blocked by a specific task
+list_tasks({
+  blocked_by: "duid_release_blocker"
+})
+
+// List tasks that a specific task is blocking
+list_tasks({
+  blocking: "duid_deployment_task"
+})
+
+// Combine relationship filters with other filters
+list_tasks({
+  dartboard: "Engineering/backend",
+  has_blockers: true,
+  priority: "high"
+})
+// Returns high-priority blocked tasks in the Engineering dartboard
 ```
+
+**Performance Note:** Relationship filters require client-side filtering and may be slower on large datasets. Consider using DartQL queries with `batch_update_tasks` for complex relationship queries.
 
 **Token Budget:** Variable based on result count (~200 tokens per 10 tasks)
 
@@ -512,11 +716,23 @@ search_tasks({
     dartboard?: string
     due_at?: string
     start_at?: string
+
+    // Relationship fields (arrays of dart_id strings)
+    subtask_ids?: string[]         // IDs of subtask (child) tasks
+    blocker_ids?: string[]         // IDs of tasks that block this task
+    blocking_ids?: string[]        // IDs of tasks blocked by this task
+    duplicate_ids?: string[]       // IDs of duplicate tasks
+    related_ids?: string[]         // IDs of related tasks
   }
   dry_run?: boolean                // default: false (RECOMMENDED: use true first!)
   concurrency?: number             // default: 5, range 1-20
 }
 ```
+
+**Relationship Update Semantics:**
+- **Full replacement**: Providing a relationship array replaces ALL existing values for ALL matched tasks
+- **Empty array `[]`**: Clears all relationships of that type on ALL matched tasks
+- **Omitting field**: Leaves existing relationships unchanged
 
 **Output Schema:**
 ```typescript
@@ -530,6 +746,7 @@ search_tasks({
     dart_id: string
     title: string
     current_values: object         // current values of fields being updated
+    new_values: object             // values that will be applied (for relationships)
   }>                               // max 10 tasks shown
 
   // If dry_run=false:
@@ -588,6 +805,51 @@ batch_update_tasks({
   concurrency: 10  // faster with higher concurrency
 })
 ```
+
+**Relationship Batch Examples:**
+
+```typescript
+// Clear all blockers from tasks in a specific dartboard
+batch_update_tasks({
+  selector: "dartboard = 'Engineering/backend' AND blocker_ids IS NOT NULL",
+  updates: {
+    blocker_ids: []  // empty array clears all blockers
+  },
+  dry_run: true  // ALWAYS preview first!
+})
+
+// Mark all high-priority tasks as blocking the release task
+batch_update_tasks({
+  selector: "priority = 'critical' AND status != 'Done'",
+  updates: {
+    blocking_ids: ["duid_release_v2"]
+  },
+  dry_run: true
+})
+
+// Link all security-tagged tasks as related to the audit task
+batch_update_tasks({
+  selector: "tags CONTAINS 'security'",
+  updates: {
+    related_ids: ["duid_security_audit_2026"]
+  },
+  dry_run: true
+})
+
+// Clear duplicate relationships from resolved tasks
+batch_update_tasks({
+  selector: "status = 'Done' AND duplicate_ids IS NOT NULL",
+  updates: {
+    duplicate_ids: []
+  },
+  dry_run: false
+})
+```
+
+**Important:** Batch relationship updates apply the SAME values to ALL matched tasks. Use this for scenarios like:
+- Clearing relationships across many tasks
+- Linking multiple tasks to a common blocker/release
+- Resetting relationships during cleanup operations
 
 **Token Budget:** ~400 tokens (returns summary, not full task data)
 
@@ -752,13 +1014,22 @@ get_batch_status({ batch_operation_id: "batch_abc123" })
 - `start_date` / `start_at` - ISO8601 date
 - `parent_task` - Parent task dart_id
 
+**Relationship Columns** (comma-separated dart_id values):
+- `subtask_ids` / `subtasks` / `children` - Comma-separated subtask IDs
+- `blocker_ids` / `blockers` / `blocked_by` - Comma-separated blocker IDs
+- `blocking_ids` / `blocking` / `blocks` - Comma-separated blocked task IDs
+- `duplicate_ids` / `duplicates` - Comma-separated duplicate task IDs
+- `related_ids` / `related` / `related_tasks` - Comma-separated related task IDs
+
 **Flexible Column Names** (case-insensitive, fuzzy matched):
 - `title` = `Title` = `Task Name` = `Task`
 - `assignee` = `Assigned To` = `Owner` = `Assignee`
 - `tags` = `Labels` = `Tags`
 - `priority` = `Priority` = `Pri`
+- `blocker_ids` = `blockers` = `blocked_by`
+- `blocking_ids` = `blocking` = `blocks`
 
-**Example CSV:**
+**Example CSV (Basic):**
 
 ```csv
 title,description,assignee,priority,tags,due_at
@@ -766,6 +1037,22 @@ title,description,assignee,priority,tags,due_at
 "Update API docs","Document new authentication endpoints",writer@company.com,medium,documentation,2026-02-15T00:00:00Z
 "Add rate limiting","Prevent API abuse",engineer@company.com,high,"feature,security",2026-02-10T00:00:00Z
 ```
+
+**Example CSV (With Relationships):**
+
+```csv
+title,priority,blocker_ids,related_ids,tags
+"Deploy to production",critical,"duid_testing,duid_code_review",,deployment
+"Write unit tests",high,,"duid_feature_impl","testing,quality"
+"Code review",medium,"duid_feature_impl",,review
+"Feature implementation",high,,,"feature,backend"
+```
+
+**CSV Relationship Format Notes:**
+- Use comma-separated dart_id values within a single cell
+- Wrap in quotes if values contain commas: `"duid_task1,duid_task2"`
+- Empty cell means no relationships of that type
+- All dart_id values must be in valid format (e.g., `duid_xxxxx`)
 
 **Workflow:**
 
@@ -976,6 +1263,7 @@ field operator value [AND|OR field operator value ...]
 
 ### Valid Fields
 
+**Core Fields:**
 - `status` - Task status
 - `priority` - Priority string
 - `size` - Size string
@@ -989,8 +1277,15 @@ field operator value [AND|OR field operator value ...]
 - `due_at` - Due date
 - `start_at` - Start date
 - `completed_at` - Completion timestamp
-- `parent_task` - Parent task ID
 - `dart_id` - Task ID
+
+**Relationship Fields:**
+- `parent_task` - Parent task ID (string)
+- `subtask_ids` - Subtask IDs (array)
+- `blocker_ids` - Blocker task IDs (array)
+- `blocking_ids` - Blocked task IDs (array)
+- `duplicate_ids` - Duplicate task IDs (array)
+- `related_ids` - Related task IDs (array)
 
 ### Examples
 
@@ -1053,6 +1348,66 @@ dartboard = 'Engineering/backend' AND (priority = 'critical' OR tags CONTAINS 'u
 ```sql
 created_at BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-31T23:59:59Z'
 ```
+
+### Relationship Query Examples
+
+**Find tasks with relationships:**
+```sql
+-- Tasks that have blockers (are blocked by something)
+blocker_ids IS NOT NULL
+
+-- Tasks that are blocking other tasks
+blocking_ids IS NOT NULL
+
+-- Tasks with subtasks (parent tasks)
+subtask_ids IS NOT NULL
+
+-- Leaf tasks (no subtasks)
+subtask_ids IS NULL
+
+-- Tasks with related tasks
+related_ids IS NOT NULL
+
+-- Tasks marked as duplicates
+duplicate_ids IS NOT NULL
+```
+
+**Find tasks blocked by a specific task:**
+```sql
+-- Tasks blocked by the release blocker
+blocker_ids CONTAINS 'duid_release_blocker'
+
+-- Tasks blocking the deployment
+blocking_ids CONTAINS 'duid_deployment'
+```
+
+**Find tasks related to a specific task:**
+```sql
+related_ids CONTAINS 'duid_feature_spec'
+```
+
+**Combined relationship and field queries:**
+```sql
+-- High-priority blocked tasks
+blocker_ids IS NOT NULL AND priority = 'high'
+
+-- Blocked tasks in Engineering dartboard
+dartboard = 'Engineering/backend' AND blocker_ids IS NOT NULL
+
+-- Critical tasks that are blocking releases
+priority = 'critical' AND blocking_ids CONTAINS 'duid_release_v2'
+
+-- Parent tasks with urgent tag
+subtask_ids IS NOT NULL AND tags CONTAINS 'urgent'
+
+-- Unblocked tasks ready to start
+blocker_ids IS NULL AND status = 'To Do' AND priority = 'high'
+```
+
+**Note on IS NULL for relationship arrays:**
+- `blocker_ids IS NULL` matches tasks with NO blockers (empty array or undefined)
+- `blocker_ids IS NOT NULL` matches tasks with AT LEAST ONE blocker
+- Empty arrays `[]` are treated as NULL for relationship fields
 
 ### API Filters vs. Client-Side Filtering
 
@@ -1499,6 +1854,160 @@ await batch_update_tasks({
 await add_task_comment({
   dart_id: "duid_task123",
   comment: "Reviewed by security team - CVSS 8.5, requires immediate patching"
+});
+```
+
+### Workflow 6: Managing Task Dependencies (Relationships)
+
+```typescript
+// Step 1: Create a release task that will be blocked by feature tasks
+const release = await create_task({
+  title: "Release v2.0",
+  dartboard: "Engineering/releases",
+  priority: "high",
+  due_at: "2026-03-01T00:00:00Z"
+});
+
+// Step 2: Create feature tasks that block the release
+const feature1 = await create_task({
+  title: "Implement OAuth2",
+  dartboard: "Engineering/backend",
+  priority: "high",
+  blocking_ids: [release.dart_id]  // This task blocks the release
+});
+
+const feature2 = await create_task({
+  title: "Update user dashboard",
+  dartboard: "Engineering/frontend",
+  priority: "high",
+  blocking_ids: [release.dart_id]  // This task also blocks the release
+});
+
+// Step 3: Update the release task with its blockers
+await update_task({
+  dart_id: release.dart_id,
+  updates: {
+    blocker_ids: [feature1.dart_id, feature2.dart_id]
+  }
+});
+
+// Step 4: Find all blocked tasks in the release pipeline
+const blockedTasks = await list_tasks({
+  has_blockers: true,
+  dartboard: "Engineering/releases"
+});
+
+// Step 5: When a feature is complete, update relationships
+// First get current state to preserve other blockers
+const releaseTask = await get_task({ dart_id: release.dart_id });
+
+// Remove completed feature from blockers
+const remainingBlockers = releaseTask.blocker_ids?.filter(
+  id => id !== feature1.dart_id
+) || [];
+
+await update_task({
+  dart_id: release.dart_id,
+  updates: {
+    blocker_ids: remainingBlockers
+  }
+});
+
+// Step 6: Find all tasks ready to release (no longer blocked)
+const readyTasks = await list_tasks({
+  has_blockers: false,
+  dartboard: "Engineering/releases",
+  status: "To Do"
+});
+```
+
+### Workflow 7: Linking Related Tasks
+
+```typescript
+// Step 1: Create a design spec task
+const designSpec = await create_task({
+  title: "Design authentication system spec",
+  dartboard: "Engineering/design",
+  priority: "high"
+});
+
+// Step 2: Create implementation tasks related to the spec
+const backendTask = await create_task({
+  title: "Implement auth backend",
+  dartboard: "Engineering/backend",
+  related_ids: [designSpec.dart_id]
+});
+
+const frontendTask = await create_task({
+  title: "Implement auth frontend",
+  dartboard: "Engineering/frontend",
+  related_ids: [designSpec.dart_id]
+});
+
+// Step 3: Update the spec to link back to implementations
+await update_task({
+  dart_id: designSpec.dart_id,
+  updates: {
+    related_ids: [backendTask.dart_id, frontendTask.dart_id]
+  }
+});
+
+// Step 4: Batch link all auth-tagged tasks to the spec
+await batch_update_tasks({
+  selector: "tags CONTAINS 'auth' AND dart_id != '" + designSpec.dart_id + "'",
+  updates: {
+    related_ids: [designSpec.dart_id]
+  },
+  dry_run: true  // Preview first!
+});
+
+// Step 5: Find all tasks related to the spec
+const relatedToSpec = await list_tasks({});
+// Then filter client-side or use DartQL:
+await batch_update_tasks({
+  selector: "related_ids CONTAINS '" + designSpec.dart_id + "'",
+  updates: { status: "In Review" },
+  dry_run: true
+});
+```
+
+### Workflow 8: Handling Duplicate Tasks
+
+```typescript
+// Step 1: Find potential duplicates via search
+const searchResults = await search_tasks({
+  query: "authentication login bug"
+});
+
+// Step 2: Mark tasks as duplicates of the original
+const originalTask = searchResults.results[0];
+const duplicateTasks = searchResults.results.slice(1);
+
+// Link duplicates to original
+await update_task({
+  dart_id: originalTask.dart_id,
+  updates: {
+    duplicate_ids: duplicateTasks.map(t => t.dart_id)
+  }
+});
+
+// Step 3: Close duplicate tasks
+await batch_update_tasks({
+  selector: `dart_id IN (${duplicateTasks.map(t => `'${t.dart_id}'`).join(', ')})`,
+  updates: {
+    status: "Duplicate",
+    duplicate_ids: [originalTask.dart_id]  // Link back to original
+  },
+  dry_run: false
+});
+
+// Step 4: Find all tasks marked as duplicates
+const allDuplicates = await list_tasks({});
+// Use DartQL to find:
+await batch_update_tasks({
+  selector: "duplicate_ids IS NOT NULL",
+  updates: { priority: "low" },
+  dry_run: true
 });
 ```
 

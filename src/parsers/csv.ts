@@ -63,7 +63,13 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   dartboard: ['dartboard', 'board', 'project'],
   due_at: ['due_at', 'due date', 'due', 'deadline'],
   start_at: ['start_at', 'start date', 'start', 'begins'],
-  parent_task: ['parent_task', 'parent', 'parent id'],
+  parent_task: ['parent_task', 'parent', 'parent_id'],
+  // Relationship fields - all store comma-separated dart_ids
+  subtask_ids: ['subtask_ids', 'subtasks', 'child_tasks'],
+  blocker_ids: ['blocker_ids', 'blockers', 'blocked_by'],
+  blocking_ids: ['blocking_ids', 'blocking', 'blocks'],
+  duplicate_ids: ['duplicate_ids', 'duplicates'],
+  related_ids: ['related_ids', 'related'],
 };
 
 /**
@@ -306,6 +312,93 @@ export function normalizeColumns(
 }
 
 // ============================================================================
+// Relationship Field Helpers
+// ============================================================================
+
+/**
+ * Fields that contain comma-separated dart_id arrays
+ */
+const RELATIONSHIP_ARRAY_FIELDS = [
+  'subtask_ids',
+  'blocker_ids',
+  'blocking_ids',
+  'duplicate_ids',
+  'related_ids',
+];
+
+/**
+ * Validates that a dart_id is in a valid format.
+ * dart_ids must be non-empty strings (format-only, not existence check).
+ *
+ * @param id - The dart_id to validate
+ * @returns true if the dart_id format is valid
+ */
+export function isValidDartIdFormat(id: string): boolean {
+  return typeof id === 'string' && id.trim().length > 0;
+}
+
+/**
+ * Parse a comma-separated string of dart_ids into an array.
+ * Validates each dart_id format and returns errors for invalid ones.
+ *
+ * @param value - Comma-separated string of dart_ids (e.g., "task-id1,task-id2,task-id3")
+ * @param fieldName - Name of the field for error reporting
+ * @param rowNumber - Row number for error reporting
+ * @returns Object with parsed array and any validation errors
+ */
+export function parseIdList(
+  value: string,
+  fieldName: string,
+  rowNumber: number
+): { ids: string[]; errors: Array<{ row_number: number; field: string; error: string; value: string }> } {
+  const errors: Array<{ row_number: number; field: string; error: string; value: string }> = [];
+
+  // Handle empty or whitespace-only value
+  if (!value || value.trim().length === 0) {
+    return { ids: [], errors };
+  }
+
+  // Split by comma and trim each ID
+  const rawIds = value.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+  // If only commas with no actual IDs
+  if (rawIds.length === 0) {
+    return { ids: [], errors };
+  }
+
+  // Validate each dart_id format
+  const validIds: string[] = [];
+  const invalidIds: string[] = [];
+
+  for (const id of rawIds) {
+    if (isValidDartIdFormat(id)) {
+      validIds.push(id);
+    } else {
+      invalidIds.push(id === '' ? '(empty string)' : id);
+    }
+  }
+
+  // Report invalid IDs
+  if (invalidIds.length > 0) {
+    errors.push({
+      row_number: rowNumber,
+      field: fieldName,
+      error: `Invalid dart_id format: ${invalidIds.join(', ')}. Each ID must be a non-empty string.`,
+      value: value,
+    });
+  }
+
+  return { ids: validIds, errors };
+}
+
+/**
+ * Check if a field is a relationship array field
+ */
+export function isRelationshipArrayField(fieldName: string): boolean {
+  return RELATIONSHIP_ARRAY_FIELDS.includes(fieldName);
+}
+
+// ============================================================================
 // Utility Functions
 // ============================================================================
 
@@ -417,14 +510,16 @@ export function resolveReferences(
       });
     } else {
       const dartboard = config.dartboards.find(
-        d => d.toLowerCase() === dartboardInput.toLowerCase()
+        d => d.name.toLowerCase() === dartboardInput.toLowerCase() ||
+             d.dart_id.toLowerCase() === dartboardInput.toLowerCase()
       );
 
       if (dartboard) {
-        resolved.dartboard = dartboard;
+        resolved.dartboard = dartboard.dart_id;
       } else {
-        // Try fuzzy matching
-        const matches = findClosestMatches(dartboardInput, config.dartboards);
+        // Try fuzzy matching on names
+        const dartboardNames = config.dartboards.map(d => d.name);
+        const matches = findClosestMatches(dartboardInput, dartboardNames);
 
         errors.push({
           row_number: rowNumber,
@@ -444,18 +539,20 @@ export function resolveReferences(
     }
   }
 
-  // Resolve status (name match)
+  // Resolve status (name → dart_id)
   if (row.status) {
     const statusInput = row.status.trim();
     const status = config.statuses.find(
-      s => s.toLowerCase() === statusInput.toLowerCase()
+      s => s.name.toLowerCase() === statusInput.toLowerCase() ||
+           s.dart_id.toLowerCase() === statusInput.toLowerCase()
     );
 
     if (status) {
-      resolved.status = status;
+      resolved.status = status.dart_id;
     } else {
-      // Try fuzzy matching
-      const matches = findClosestMatches(statusInput, config.statuses);
+      // Try fuzzy matching on names
+      const statusNames = config.statuses.map(s => s.name);
+      const matches = findClosestMatches(statusInput, statusNames);
 
       errors.push({
         row_number: rowNumber,
@@ -474,16 +571,18 @@ export function resolveReferences(
     }
   }
 
-  // Resolve assignee (email/name)
+  // Resolve assignee (email/name → dart_id or email)
   if (row.assignee) {
     const assigneeInput = row.assignee.trim();
     const assignee = config.assignees.find(
       a => (a.email && a.email.toLowerCase() === assigneeInput.toLowerCase()) ||
-           a.name.toLowerCase() === assigneeInput.toLowerCase()
+           a.name.toLowerCase() === assigneeInput.toLowerCase() ||
+           (a.dart_id && a.dart_id.toLowerCase() === assigneeInput.toLowerCase())
     );
 
     if (assignee) {
-      resolved.assignee = assignee.email || assignee.name;
+      // Return dart_id if available, otherwise email or name
+      resolved.assignee = assignee.dart_id || assignee.email || assignee.name;
     } else {
       // Try fuzzy matching on both email and name
       const assigneeEmails = config.assignees.filter(a => a.email).map(a => a.email!);
@@ -522,10 +621,10 @@ export function resolveReferences(
         value: row.tags,
       });
     } else {
-      const tagNames = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+      const tagInputNames = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
       // Edge case: only commas, no actual tag names
-      if (tagNames.length === 0) {
+      if (tagInputNames.length === 0) {
         errors.push({
           row_number: rowNumber,
           field: 'tags',
@@ -536,28 +635,30 @@ export function resolveReferences(
         const resolvedTags: string[] = [];
         let hasTagErrors = false;
 
-        for (const tagName of tagNames) {
+        for (const tagInput of tagInputNames) {
           const tag = config.tags.find(
-            t => t.toLowerCase() === tagName.toLowerCase()
+            t => t.name.toLowerCase() === tagInput.toLowerCase() ||
+                 t.dart_id.toLowerCase() === tagInput.toLowerCase()
           );
 
           if (tag) {
-            resolvedTags.push(tag);
+            resolvedTags.push(tag.dart_id);
           } else {
-            // Try fuzzy matching
-            const matches = findClosestMatches(tagName, config.tags);
+            // Try fuzzy matching on names
+            const tagNames = config.tags.map(t => t.name);
+            const matches = findClosestMatches(tagInput, tagNames);
 
             errors.push({
               row_number: rowNumber,
               field: 'tags',
-              error: `Tag '${tagName}' not found in workspace`,
-              value: tagName,
+              error: `Tag '${tagInput}' not found in workspace`,
+              value: tagInput,
             });
 
             if (matches.length > 0) {
               suggestions.push({
                 field: 'tags',
-                input: tagName,
+                input: tagInput,
                 suggestions: matches,
               });
             }
@@ -573,6 +674,32 @@ export function resolveReferences(
           // Remove original string value if resolution failed
           delete resolved.tags;
         }
+      }
+    }
+  }
+
+  // Parse relationship array fields (comma-separated dart_ids)
+  // These don't require workspace lookup - just format validation
+  for (const field of RELATIONSHIP_ARRAY_FIELDS) {
+    if (row[field]) {
+      const parseResult = parseIdList(row[field], field, rowNumber);
+
+      // Add any validation errors
+      for (const err of parseResult.errors) {
+        errors.push({
+          row_number: err.row_number,
+          field: err.field,
+          error: err.error,
+          value: err.value,
+        });
+      }
+
+      // Set parsed array if we have valid IDs (even if some were invalid)
+      if (parseResult.ids.length > 0) {
+        resolved[field] = parseResult.ids;
+      } else {
+        // Remove original string value if no valid IDs
+        delete resolved[field];
       }
     }
   }
@@ -620,14 +747,15 @@ export function validateRow(
     });
   }
 
-  // Validate priority (must match config)
+  // Validate priority (must match config - by label or value)
   if (row.priority) {
     const priorityInput = row.priority.trim().toLowerCase();
     const validPriority = config.priorities.find(
-      p => p.toLowerCase() === priorityInput
+      p => p.label.toLowerCase() === priorityInput ||
+           p.value.toString() === row.priority.trim()
     );
     if (!validPriority) {
-      const availablePriorities = config.priorities.join(', ');
+      const availablePriorities = config.priorities.map(p => `${p.label} (${p.value})`).join(', ');
       errors.push({
         row_number: rowNumber,
         field: 'priority',
@@ -637,14 +765,15 @@ export function validateRow(
     }
   }
 
-  // Validate size (must match config)
+  // Validate size (must match config - by label or value)
   if (row.size) {
     const sizeInput = row.size.trim().toLowerCase();
     const validSize = config.sizes.find(
-      s => s.toLowerCase() === sizeInput
+      s => s.label.toLowerCase() === sizeInput ||
+           s.value.toString() === row.size.trim()
     );
     if (!validSize) {
-      const availableSizes = config.sizes.slice(0, 10).join(', ') +
+      const availableSizes = config.sizes.slice(0, 10).map(s => `${s.label} (${s.value})`).join(', ') +
         (config.sizes.length > 10 ? `, ... (${config.sizes.length - 10} more)` : '');
       errors.push({
         row_number: rowNumber,
@@ -683,7 +812,8 @@ export function validateRow(
   if (row.dartboard) {
     const dartboardInput = row.dartboard.trim();
     const dartboard = config.dartboards.find(
-      d => d.toLowerCase() === dartboardInput.toLowerCase()
+      d => d.name.toLowerCase() === dartboardInput.toLowerCase() ||
+           d.dart_id.toLowerCase() === dartboardInput.toLowerCase()
     );
 
     if (!dartboard) {
@@ -700,7 +830,8 @@ export function validateRow(
   if (row.status) {
     const statusInput = row.status.trim();
     const status = config.statuses.find(
-      s => s.toLowerCase() === statusInput.toLowerCase()
+      s => s.name.toLowerCase() === statusInput.toLowerCase() ||
+           s.dart_id.toLowerCase() === statusInput.toLowerCase()
     );
 
     if (!status) {
@@ -718,7 +849,8 @@ export function validateRow(
     const assigneeInput = row.assignee.trim();
     const assignee = config.assignees.find(
       a => (a.email && a.email.toLowerCase() === assigneeInput.toLowerCase()) ||
-           a.name.toLowerCase() === assigneeInput.toLowerCase()
+           a.name.toLowerCase() === assigneeInput.toLowerCase() ||
+           (a.dart_id && a.dart_id.toLowerCase() === assigneeInput.toLowerCase())
     );
 
     if (!assignee) {
@@ -734,19 +866,37 @@ export function validateRow(
   // Validate tags exist (reference validation)
   if (row.tags) {
     const tagsInput = row.tags.trim();
-    const tagNames = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    const tagInputNames = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
-    for (const tagName of tagNames) {
+    for (const tagInput of tagInputNames) {
       const tag = config.tags.find(
-        t => t.toLowerCase() === tagName.toLowerCase()
+        t => t.name.toLowerCase() === tagInput.toLowerCase() ||
+             t.dart_id.toLowerCase() === tagInput.toLowerCase()
       );
 
       if (!tag) {
         errors.push({
           row_number: rowNumber,
           field: 'tags',
-          error: `Tag '${tagName}' not found in workspace`,
-          value: tagName,
+          error: `Tag '${tagInput}' not found in workspace`,
+          value: tagInput,
+        });
+      }
+    }
+  }
+
+  // Validate relationship array fields (format-only, not existence check)
+  for (const field of RELATIONSHIP_ARRAY_FIELDS) {
+    if (row[field]) {
+      const parseResult = parseIdList(row[field], field, rowNumber);
+
+      // Add any validation errors (invalid dart_id format)
+      for (const err of parseResult.errors) {
+        errors.push({
+          row_number: err.row_number,
+          field: err.field,
+          error: err.error,
+          value: err.value,
         });
       }
     }

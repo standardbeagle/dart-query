@@ -1789,3 +1789,430 @@ describe('convertToFilters', () => {
     });
   });
 });
+
+// ============================================================================
+// Relationship Field Tests
+// ============================================================================
+
+describe('DartQL Relationship Fields', () => {
+  describe('Field Validation', () => {
+    it('should recognize subtask_ids as valid field', () => {
+      const result = parseDartQL('subtask_ids IS NOT NULL');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.fields).toContain('subtask_ids');
+    });
+
+    it('should recognize blocker_ids as valid field', () => {
+      const result = parseDartQL('blocker_ids CONTAINS "task-abc123"');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.fields).toContain('blocker_ids');
+    });
+
+    it('should recognize blocking_ids as valid field', () => {
+      const result = parseDartQL('blocking_ids IS NULL');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.fields).toContain('blocking_ids');
+    });
+
+    it('should recognize duplicate_ids as valid field', () => {
+      const result = parseDartQL('duplicate_ids IS NOT NULL');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.fields).toContain('duplicate_ids');
+    });
+
+    it('should recognize related_ids as valid field', () => {
+      const result = parseDartQL('related_ids CONTAINS "task-xyz789"');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.fields).toContain('related_ids');
+    });
+
+    it('should recognize parent_task as valid field', () => {
+      const result = parseDartQL('parent_task IS NULL');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.fields).toContain('parent_task');
+    });
+
+    it('should validate all relationship fields in complex query', () => {
+      const result = parseDartQL(
+        'subtask_ids IS NOT NULL AND blocker_ids CONTAINS "task-1" AND parent_task IS NULL'
+      );
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.fields).toContain('subtask_ids');
+      expect(result.fields).toContain('blocker_ids');
+      expect(result.fields).toContain('parent_task');
+    });
+  });
+
+  describe('AST Parsing', () => {
+    it('should parse: blocker_ids CONTAINS "task-abc123"', () => {
+      const result = parseDartQLToAST('blocker_ids CONTAINS "task-abc123"');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.ast.type).toBe('comparison');
+      expect(result.ast.field).toBe('blocker_ids');
+      expect(result.ast.operator).toBe('CONTAINS');
+      expect(result.ast.value).toBe('task-abc123');
+    });
+
+    it('should parse: subtask_ids IS NOT NULL (has subtasks)', () => {
+      const result = parseDartQLToAST('subtask_ids IS NOT NULL');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.ast.type).toBe('comparison');
+      expect(result.ast.field).toBe('subtask_ids');
+      expect(result.ast.operator).toBe('IS NOT NULL');
+      expect(result.ast.value).toBe(null);
+    });
+
+    it('should parse: parent_task IS NULL (root level tasks)', () => {
+      const result = parseDartQLToAST('parent_task IS NULL');
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.ast.type).toBe('comparison');
+      expect(result.ast.field).toBe('parent_task');
+      expect(result.ast.operator).toBe('IS NULL');
+      expect(result.ast.value).toBe(null);
+    });
+
+    it('should parse complex relationship query', () => {
+      const result = parseDartQLToAST(
+        'parent_task IS NULL AND subtask_ids IS NOT NULL AND status = "Todo"'
+      );
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.ast.type).toBe('logical');
+      expect(result.ast.operator).toBe('AND');
+      expect(result.fields).toContain('parent_task');
+      expect(result.fields).toContain('subtask_ids');
+      expect(result.fields).toContain('status');
+    });
+  });
+
+  describe('Client-Side Filtering: CONTAINS on Relationship Arrays', () => {
+    it('should filter blocker_ids CONTAINS "task-abc123"', () => {
+      const ast = parseDartQLToAST('blocker_ids CONTAINS "task-abc123"').ast;
+      const result = convertToFilters(ast);
+
+      expect(result.requiresClientSide).toBe(true);
+      expect(result.clientFilter).toBeDefined();
+
+      if (result.clientFilter) {
+        // Task blocked by task-abc123
+        expect(result.clientFilter({ blocker_ids: ['task-abc123', 'task-def456'] })).toBe(true);
+        expect(result.clientFilter({ blocker_ids: ['task-abc123'] })).toBe(true);
+
+        // Task not blocked by task-abc123
+        expect(result.clientFilter({ blocker_ids: ['task-def456'] })).toBe(false);
+        expect(result.clientFilter({ blocker_ids: [] })).toBe(false);
+        expect(result.clientFilter({ blocker_ids: undefined })).toBe(false);
+      }
+    });
+
+    it('should filter subtask_ids CONTAINS "task-child"', () => {
+      const ast = parseDartQLToAST('subtask_ids CONTAINS "task-child"').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({ subtask_ids: ['task-child', 'task-other'] })).toBe(true);
+        expect(result.clientFilter({ subtask_ids: ['task-other'] })).toBe(false);
+        expect(result.clientFilter({ subtask_ids: [] })).toBe(false);
+      }
+    });
+
+    it('should filter related_ids CONTAINS "task-related"', () => {
+      const ast = parseDartQLToAST('related_ids CONTAINS "task-related"').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({ related_ids: ['task-related'] })).toBe(true);
+        expect(result.clientFilter({ related_ids: ['task-other'] })).toBe(false);
+      }
+    });
+  });
+
+  describe('Client-Side Filtering: IS NULL / IS NOT NULL on Arrays', () => {
+    it('should filter subtask_ids IS NULL (no subtasks)', () => {
+      const ast = parseDartQLToAST('subtask_ids IS NULL').ast;
+      const result = convertToFilters(ast);
+
+      expect(result.requiresClientSide).toBe(true);
+
+      if (result.clientFilter) {
+        // No subtasks (empty array, null, or undefined)
+        expect(result.clientFilter({ subtask_ids: [] })).toBe(true);
+        expect(result.clientFilter({ subtask_ids: null })).toBe(true);
+        expect(result.clientFilter({ subtask_ids: undefined })).toBe(true);
+        expect(result.clientFilter({})).toBe(true);
+
+        // Has subtasks
+        expect(result.clientFilter({ subtask_ids: ['task-1'] })).toBe(false);
+        expect(result.clientFilter({ subtask_ids: ['task-1', 'task-2'] })).toBe(false);
+      }
+    });
+
+    it('should filter subtask_ids IS NOT NULL (has subtasks)', () => {
+      const ast = parseDartQLToAST('subtask_ids IS NOT NULL').ast;
+      const result = convertToFilters(ast);
+
+      expect(result.requiresClientSide).toBe(true);
+
+      if (result.clientFilter) {
+        // Has subtasks (non-empty array)
+        expect(result.clientFilter({ subtask_ids: ['task-1'] })).toBe(true);
+        expect(result.clientFilter({ subtask_ids: ['task-1', 'task-2', 'task-3'] })).toBe(true);
+
+        // No subtasks (empty array, null, undefined)
+        expect(result.clientFilter({ subtask_ids: [] })).toBe(false);
+        expect(result.clientFilter({ subtask_ids: null })).toBe(false);
+        expect(result.clientFilter({ subtask_ids: undefined })).toBe(false);
+        expect(result.clientFilter({})).toBe(false);
+      }
+    });
+
+    it('should filter blocker_ids IS NULL (not blocked)', () => {
+      const ast = parseDartQLToAST('blocker_ids IS NULL').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({ blocker_ids: [] })).toBe(true);
+        expect(result.clientFilter({ blocker_ids: null })).toBe(true);
+        expect(result.clientFilter({ blocker_ids: ['task-blocker'] })).toBe(false);
+      }
+    });
+
+    it('should filter blocker_ids IS NOT NULL (is blocked)', () => {
+      const ast = parseDartQLToAST('blocker_ids IS NOT NULL').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({ blocker_ids: ['task-blocker'] })).toBe(true);
+        expect(result.clientFilter({ blocker_ids: [] })).toBe(false);
+      }
+    });
+
+    it('should filter blocking_ids IS NOT NULL (is blocking other tasks)', () => {
+      const ast = parseDartQLToAST('blocking_ids IS NOT NULL').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({ blocking_ids: ['task-blocked'] })).toBe(true);
+        expect(result.clientFilter({ blocking_ids: [] })).toBe(false);
+      }
+    });
+  });
+
+  describe('Client-Side Filtering: parent_task (string field)', () => {
+    it('should filter parent_task IS NULL (root level tasks)', () => {
+      const ast = parseDartQLToAST('parent_task IS NULL').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        // Root level tasks (no parent)
+        expect(result.clientFilter({ parent_task: null })).toBe(true);
+        expect(result.clientFilter({ parent_task: undefined })).toBe(true);
+        expect(result.clientFilter({})).toBe(true);
+
+        // Subtasks (has parent)
+        expect(result.clientFilter({ parent_task: 'task-parent' })).toBe(false);
+      }
+    });
+
+    it('should filter parent_task IS NOT NULL (subtasks)', () => {
+      const ast = parseDartQLToAST('parent_task IS NOT NULL').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        // Subtasks (has parent)
+        expect(result.clientFilter({ parent_task: 'task-parent' })).toBe(true);
+
+        // Root level tasks (no parent)
+        expect(result.clientFilter({ parent_task: null })).toBe(false);
+        expect(result.clientFilter({ parent_task: undefined })).toBe(false);
+      }
+    });
+
+    it('should filter parent_task = "task-specific-parent"', () => {
+      const ast = parseDartQLToAST('parent_task = "task-specific-parent"').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({ parent_task: 'task-specific-parent' })).toBe(true);
+        expect(result.clientFilter({ parent_task: 'task-other-parent' })).toBe(false);
+        expect(result.clientFilter({ parent_task: null })).toBe(false);
+      }
+    });
+  });
+
+  describe('Complex Relationship Queries', () => {
+    it('should filter: parent_task IS NULL AND subtask_ids IS NOT NULL (root tasks with children)', () => {
+      const ast = parseDartQLToAST('parent_task IS NULL AND subtask_ids IS NOT NULL').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        // Root task with subtasks
+        expect(result.clientFilter({
+          parent_task: null,
+          subtask_ids: ['task-child-1', 'task-child-2']
+        })).toBe(true);
+
+        // Root task without subtasks
+        expect(result.clientFilter({
+          parent_task: null,
+          subtask_ids: []
+        })).toBe(false);
+
+        // Subtask with its own subtasks
+        expect(result.clientFilter({
+          parent_task: 'task-parent',
+          subtask_ids: ['task-grandchild']
+        })).toBe(false);
+      }
+    });
+
+    it('should filter: blocker_ids IS NOT NULL AND status = "Todo" (blocked todo tasks)', () => {
+      const ast = parseDartQLToAST('blocker_ids IS NOT NULL AND status = "Todo"').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({
+          blocker_ids: ['task-blocker'],
+          status: 'Todo'
+        })).toBe(true);
+
+        expect(result.clientFilter({
+          blocker_ids: [],
+          status: 'Todo'
+        })).toBe(false);
+
+        expect(result.clientFilter({
+          blocker_ids: ['task-blocker'],
+          status: 'Done'
+        })).toBe(false);
+      }
+    });
+
+    it('should filter: (blocker_ids IS NULL OR blocking_ids IS NOT NULL) AND priority >= 3', () => {
+      const ast = parseDartQLToAST('(blocker_ids IS NULL OR blocking_ids IS NOT NULL) AND priority >= 3').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        // Not blocked, high priority
+        expect(result.clientFilter({
+          blocker_ids: [],
+          blocking_ids: [],
+          priority: 5
+        })).toBe(true);
+
+        // Blocking others, high priority
+        expect(result.clientFilter({
+          blocker_ids: ['task-x'],
+          blocking_ids: ['task-y'],
+          priority: 4
+        })).toBe(true);
+
+        // Blocked, not blocking, high priority
+        expect(result.clientFilter({
+          blocker_ids: ['task-x'],
+          blocking_ids: [],
+          priority: 5
+        })).toBe(false);
+
+        // Not blocked but low priority
+        expect(result.clientFilter({
+          blocker_ids: [],
+          blocking_ids: [],
+          priority: 2
+        })).toBe(false);
+      }
+    });
+
+    it('should filter: duplicate_ids IS NOT NULL (tasks with duplicates)', () => {
+      const ast = parseDartQLToAST('duplicate_ids IS NOT NULL').ast;
+      const result = convertToFilters(ast);
+
+      if (result.clientFilter) {
+        expect(result.clientFilter({ duplicate_ids: ['task-dup'] })).toBe(true);
+        expect(result.clientFilter({ duplicate_ids: [] })).toBe(false);
+      }
+    });
+  });
+
+  describe('Real-World Relationship Scenarios', () => {
+    it('should find all root-level tasks (tasks without parents)', () => {
+      const ast = parseDartQLToAST('parent_task IS NULL').ast;
+      const result = convertToFilters(ast);
+
+      const tasks = [
+        { id: 'task-1', title: 'Root Task 1', parent_task: null },
+        { id: 'task-2', title: 'Subtask', parent_task: 'task-1' },
+        { id: 'task-3', title: 'Root Task 2', parent_task: undefined },
+      ];
+
+      if (result.clientFilter) {
+        const rootTasks = tasks.filter(result.clientFilter);
+        expect(rootTasks).toHaveLength(2);
+        expect(rootTasks.map(t => t.id)).toEqual(['task-1', 'task-3']);
+      }
+    });
+
+    it('should find all tasks blocked by a specific task', () => {
+      const ast = parseDartQLToAST('blocker_ids CONTAINS "task-blocker"').ast;
+      const result = convertToFilters(ast);
+
+      const tasks = [
+        { id: 'task-1', blocker_ids: ['task-blocker'] },
+        { id: 'task-2', blocker_ids: ['task-other'] },
+        { id: 'task-3', blocker_ids: ['task-blocker', 'task-other'] },
+        { id: 'task-4', blocker_ids: [] },
+      ];
+
+      if (result.clientFilter) {
+        const blockedTasks = tasks.filter(result.clientFilter);
+        expect(blockedTasks).toHaveLength(2);
+        expect(blockedTasks.map(t => t.id)).toEqual(['task-1', 'task-3']);
+      }
+    });
+
+    it('should find all tasks that have subtasks', () => {
+      const ast = parseDartQLToAST('subtask_ids IS NOT NULL').ast;
+      const result = convertToFilters(ast);
+
+      const tasks = [
+        { id: 'task-1', subtask_ids: ['task-child-1', 'task-child-2'] },
+        { id: 'task-2', subtask_ids: [] },
+        { id: 'task-3', subtask_ids: ['task-child-3'] },
+      ];
+
+      if (result.clientFilter) {
+        const parentTasks = tasks.filter(result.clientFilter);
+        expect(parentTasks).toHaveLength(2);
+        expect(parentTasks.map(t => t.id)).toEqual(['task-1', 'task-3']);
+      }
+    });
+
+    it('should find unblocked high-priority tasks', () => {
+      const ast = parseDartQLToAST('blocker_ids IS NULL AND priority >= 4').ast;
+      const result = convertToFilters(ast);
+
+      const tasks = [
+        { id: 'task-1', blocker_ids: [], priority: 5 },
+        { id: 'task-2', blocker_ids: ['task-x'], priority: 5 },
+        { id: 'task-3', blocker_ids: [], priority: 2 },
+        { id: 'task-4', blocker_ids: [], priority: 4 },
+      ];
+
+      if (result.clientFilter) {
+        const unblockedHighPriority = tasks.filter(result.clientFilter);
+        expect(unblockedHighPriority).toHaveLength(2);
+        expect(unblockedHighPriority.map(t => t.id)).toEqual(['task-1', 'task-4']);
+      }
+    });
+  });
+});

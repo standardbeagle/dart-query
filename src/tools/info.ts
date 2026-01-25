@@ -40,15 +40,15 @@ const TOOL_GROUPS = {
     tools: [
       {
         name: 'create_task',
-        description: 'Create a new task with title, description, status, priority, size, dates, dartboard, assignees, tags',
+        description: 'Create a new task with title, description, status, priority, size, dates, dartboard, assignees, tags, and relationships (parent, blockers, related)',
       },
       {
         name: 'get_task',
-        description: 'Retrieve an existing task by its dart_id with full details',
+        description: 'Retrieve an existing task by its dart_id with full details and relationship information',
       },
       {
         name: 'update_task',
-        description: "Update an existing task's properties (status, title, description, priority, assignees, etc.)",
+        description: "Update an existing task's properties (status, title, description, priority, assignees, relationships, etc.)",
       },
       {
         name: 'delete_task',
@@ -66,7 +66,7 @@ const TOOL_GROUPS = {
     tools: [
       {
         name: 'list_tasks',
-        description: 'List tasks with optional filtering by assignee, status, dartboard, priority, due date, and more',
+        description: 'List tasks with optional filtering by assignee, status, dartboard, priority, due date, relationships, and more',
       },
       {
         name: 'search_tasks',
@@ -148,9 +148,10 @@ task-batch  | 3     | Bulk operations on multiple tasks
 doc-crud    | 5     | Document management
 import      | 1     | CSV bulk import
 
-Quick Start: info(level='group', target='task-crud')
-Batch Ops:   info(level='group', target='task-batch')
-DartQL Help: info(level='tool', target='batch_update_tasks')`;
+Quick Start:    info(level='group', target='task-crud')
+Batch Ops:      info(level='group', target='task-batch')
+DartQL Help:    info(level='tool', target='batch_update_tasks')
+Relationships:  info(level='tool', target='relationships')`;
 }
 
 /**
@@ -358,6 +359,82 @@ Workflow:
 
 Token Budget: ~500 tokens
 Performance: Slow (depends on row count)`,
+
+    relationships: `Topic: Task Relationships
+Description: Dart supports six relationship types to model task dependencies and connections
+
+Relationship Types:
+  parent_task / subtask_ids
+    Hierarchical parent-child relationships for breaking work into subtasks.
+    A task can have one parent and multiple subtasks.
+
+  blocker_ids / blocking_ids
+    Dependency relationships where one task blocks another.
+    blocker_ids: Tasks that must complete before this task can start.
+    blocking_ids: Tasks that this task is blocking.
+
+  duplicate_ids
+    Links tasks that represent the same work (usually to consolidate).
+    Bidirectional - marking A as duplicate of B links both.
+
+  related_ids
+    General-purpose links between related tasks.
+    Use for reference without implying dependency or hierarchy.
+
+Creating Tasks with Relationships:
+  create_task(
+    title="Implement login",
+    subtask_ids=["duid_task2", "duid_task3"],
+    blocker_ids=["duid_task1"]
+  )
+
+Updating Relationships:
+  update_task(
+    dart_id="duid_task1",
+    subtask_ids=["duid_new1", "duid_new2"],  // Replaces existing
+    related_ids=[]  // Clears all related tasks
+  )
+  Note: Relationship updates use full replacement, not append.
+
+Querying Relationships:
+  get_task(dart_id="duid_task1", expand_relationships=true)
+    → Includes relationship_counts and expanded relationship details
+
+  list_tasks(has_subtasks=true)
+    → Filter to parent tasks only
+
+  list_tasks(has_blockers=true)
+    → Find blocked tasks
+
+  list_tasks(blocked_by="duid_task1")
+    → Find all tasks blocked by a specific task
+
+Relationship Filters (list_tasks):
+  has_parent: boolean        - Tasks with a parent task
+  has_subtasks: boolean      - Tasks with subtasks
+  has_blockers: boolean      - Tasks blocked by other tasks
+  is_blocking: boolean       - Tasks blocking other tasks
+  blocked_by: string         - Tasks blocked by specific task
+  blocking: string           - Tasks that block specific task
+
+DartQL Relationship Queries:
+  "subtask_ids IS NOT NULL"        - Parent tasks
+  "blocker_ids CONTAINS 'duid_x'"  - Tasks blocked by duid_x
+  "related_ids IS NULL"            - Tasks with no relations
+
+CSV Import:
+  Relationship columns accept comma-separated dart_ids:
+    subtask_ids,blocker_ids
+    "duid_a,duid_b","duid_c"
+
+Best Practices:
+  - Use expand_relationships=true sparingly (adds API calls)
+  - Clear relationships with empty array [], not null
+  - Validate dart_ids exist before creating relationships
+  - Use has_blockers filter to find blocked work
+
+Token Budget: ~600 tokens
+Performance: Varies by operation`,
   };
 
   const doc = toolDocs[target];

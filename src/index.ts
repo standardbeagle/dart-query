@@ -114,7 +114,7 @@ class DartQueryServer {
         // Task CRUD
         {
           name: 'create_task',
-          description: 'Create a new task with title, description, status, priority, size, dates, dartboard, assignees, tags',
+          description: 'Create a new task with title, description, status, priority, size, dates, dartboard, assignees, tags, and task relationships (subtasks, blockers, related tasks)',
           inputSchema: {
             type: 'object',
             properties: {
@@ -164,6 +164,31 @@ class DartQueryServer {
                 type: 'string',
                 description: 'Parent task dart_id for subtasks',
               },
+              subtask_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of tasks that are subtasks (children) of this task. Each ID must be a valid dart_id format.',
+              },
+              blocker_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of tasks that block this task from being started or completed. Each ID must be a valid dart_id format.',
+              },
+              blocking_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of tasks that this task is blocking. Each ID must be a valid dart_id format.',
+              },
+              duplicate_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of tasks that are duplicates of this task. Each ID must be a valid dart_id format.',
+              },
+              related_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of tasks that are related to this task (loosely connected). Each ID must be a valid dart_id format.',
+              },
             },
             required: ['title', 'dartboard'],
           },
@@ -172,7 +197,7 @@ class DartQueryServer {
         // Task Query
         {
           name: 'list_tasks',
-          description: 'Query tasks with filters (assignee, status, dartboard, priority, tags, dates), pagination, and detail levels',
+          description: 'Query tasks with filters (assignee, status, dartboard, priority, tags, dates, relationships), pagination, and detail levels. Relationship filters use client-side filtering - may be slower for large task counts.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -205,6 +230,32 @@ class DartQueryServer {
                 type: 'string',
                 description: 'Filter tasks due after date (ISO8601)',
               },
+              // Relationship filters (client-side)
+              has_parent: {
+                type: 'boolean',
+                description: 'Filter tasks with parent (true) or without parent (false). Client-side filter.',
+              },
+              has_subtasks: {
+                type: 'boolean',
+                description: 'Filter tasks with subtasks (true) or without subtasks (false). Client-side filter.',
+              },
+              has_blockers: {
+                type: 'boolean',
+                description: 'Filter tasks that are blocked (true) or not blocked (false). Client-side filter.',
+              },
+              is_blocking: {
+                type: 'boolean',
+                description: 'Filter tasks that block others (true) or block nothing (false). Client-side filter.',
+              },
+              blocked_by: {
+                type: 'string',
+                description: 'Filter tasks blocked by specific task (dart_id). Client-side filter.',
+              },
+              blocking: {
+                type: 'string',
+                description: 'Filter tasks that are blocking a specific task (dart_id). Client-side filter.',
+              },
+              // Pagination
               limit: {
                 type: 'integer',
                 description: 'Max tasks to return (default: 50, max: 500)',
@@ -216,14 +267,14 @@ class DartQueryServer {
               detail_level: {
                 type: 'string',
                 enum: ['minimal', 'standard', 'full'],
-                description: 'minimal=id+title, standard=+status+assignee+priority, full=all fields',
+                description: 'minimal=id+title, standard=+status+assignee+priority, full=all fields including relationships',
               },
             },
           },
         },
         {
           name: 'get_task',
-          description: 'Get a specific task by dart_id with optional comments',
+          description: 'Get a specific task by dart_id with optional comments and relationship details. Returns task relationships (subtasks, blockers, blocking, duplicates, related) with counts and optional expanded titles.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -235,13 +286,21 @@ class DartQueryServer {
                 type: 'boolean',
                 description: 'Include task comments in response (default: false)',
               },
+              include_relationships: {
+                type: 'boolean',
+                description: 'Include relationship fields and counts in response (default: true). Set to false for smaller response.',
+              },
+              expand_relationships: {
+                type: 'boolean',
+                description: 'Fetch titles for all related tasks (default: false). Requires additional API calls. Only applies when include_relationships is true.',
+              },
             },
             required: ['dart_id'],
           },
         },
         {
           name: 'update_task',
-          description: 'Update an existing task with partial field updates (validates references, only sends changed fields)',
+          description: 'Update an existing task with partial field updates including task relationships (validates references, only sends changed fields). Relationship arrays use full replacement semantics - to add/remove, get current values, modify, then update with the full array.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -299,6 +358,31 @@ class DartQueryServer {
                     type: 'string',
                     description: 'Parent task dart_id',
                   },
+                  subtask_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that are subtasks (children) of this task. Full replacement: set to [] to clear all subtasks.',
+                  },
+                  blocker_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that block this task. Full replacement: set to [] to clear all blockers.',
+                  },
+                  blocking_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that this task is blocking. Full replacement: set to [] to clear.',
+                  },
+                  duplicate_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that are duplicates of this task. Full replacement: set to [] to clear.',
+                  },
+                  related_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of related tasks (loosely connected). Full replacement: set to [] to clear.',
+                  },
                 },
               },
             },
@@ -323,7 +407,7 @@ class DartQueryServer {
         // Batch Operations
         {
           name: 'batch_update_tasks',
-          description: 'Batch update multiple tasks matching a DartQL selector. CRITICAL: Always use dry_run=true first to preview changes!',
+          description: 'Batch update multiple tasks matching a DartQL selector. Supports all task fields including relationships. CRITICAL: Always use dry_run=true first to preview changes!',
           inputSchema: {
             type: 'object',
             properties: {
@@ -333,7 +417,7 @@ class DartQueryServer {
               },
               updates: {
                 type: 'object',
-                description: 'Fields to update (partial DartTask object)',
+                description: 'Fields to update (partial DartTask object). Relationship arrays use full replacement semantics - set to [] to clear.',
                 properties: {
                   title: { type: 'string' },
                   description: { type: 'string' },
@@ -346,6 +430,31 @@ class DartQueryServer {
                   due_at: { type: 'string' },
                   start_at: { type: 'string' },
                   parent_task: { type: 'string' },
+                  subtask_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that are subtasks (children) of this task. Full replacement: set to [] to clear.',
+                  },
+                  blocker_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that block this task. Full replacement: set to [] to clear.',
+                  },
+                  blocking_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that this task is blocking. Full replacement: set to [] to clear.',
+                  },
+                  duplicate_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of tasks that are duplicates of this task. Full replacement: set to [] to clear.',
+                  },
+                  related_ids: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'IDs of related tasks (loosely connected). Full replacement: set to [] to clear.',
+                  },
                 },
               },
               dry_run: {

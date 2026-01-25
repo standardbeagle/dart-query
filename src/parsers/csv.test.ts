@@ -1062,7 +1062,7 @@ describe('validateRow - data types (priority, size)', () => {
 
     expect(errors).toHaveLength(1);
     expect(errors[0].field).toBe('priority');
-    expect(errors[0].error).toContain('1 and 5');
+    expect(errors[0].error).toContain('Available priorities:');
   });
 
   test('errors on priority > 5', () => {
@@ -1073,8 +1073,9 @@ describe('validateRow - data types (priority, size)', () => {
     expect(errors[0].field).toBe('priority');
   });
 
-  test('errors on non-numeric priority', () => {
-    const row = { title: 'Task', priority: 'high' };
+  test('errors on non-matching priority', () => {
+    // Note: 'high' matches config label 'High' case-insensitively, so use 'invalid'
+    const row = { title: 'Task', priority: 'invalid' };
     const errors = validateRow(row, config, 1);
 
     expect(errors).toHaveLength(1);
@@ -1450,8 +1451,9 @@ describe('validateRow - edge cases', () => {
     const row = { title: 'Task', priority: '3.5' };
     const errors = validateRow(row, config, 1);
 
-    // parseInt will convert 3.5 to 3, which is valid
-    expect(errors).toEqual([]);
+    // Config-based validation requires exact match; '3.5' doesn't match '3'
+    expect(errors).toHaveLength(1);
+    expect(errors[0].field).toBe('priority');
   });
 
   test('handles negative priority values', () => {

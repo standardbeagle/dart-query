@@ -290,9 +290,16 @@ export class DartClient {
     if (input.start_at) apiInput.startAt = input.start_at;
     if (input.parent_task) apiInput.parentId = input.parent_task;
 
+    // Relationship fields: snake_case → camelCase
+    if (input.subtask_ids !== undefined) apiInput.subtaskIds = input.subtask_ids;
+    if (input.blocker_ids !== undefined) apiInput.blockerIds = input.blocker_ids;
+    if (input.blocking_ids !== undefined) apiInput.blockingIds = input.blocking_ids;
+    if (input.duplicate_ids !== undefined) apiInput.duplicateIds = input.duplicate_ids;
+    if (input.related_ids !== undefined) apiInput.relatedIds = input.related_ids;
+
     // Wrap in item object as required by API
-    const response = await this.request<{ item: DartTask }>('POST', '/tasks', { item: apiInput });
-    return response.item;
+    const response = await this.request<{ item: any }>('POST', '/tasks', { item: apiInput });
+    return this.mapTaskResponse(response.item);
   }
 
   /**
@@ -319,17 +326,35 @@ export class DartClient {
 
     const response = await this.request<{ count: number; results: any[] }>('GET', endpoint);
 
-    // Map API response: add dart_id field for compatibility
-    const tasks = (response.results || []).map((task: any) => ({
-      ...task,
-      dart_id: task.id || task.dart_id,
-      created_at: task.createdAt || task.created_at,
-      updated_at: task.updatedAt || task.updated_at,
-    }));
+    // Map API response using helper function
+    const tasks = (response.results || []).map((task: any) => this.mapTaskResponse(task));
 
     return {
       tasks,
       total: response.count || 0
+    };
+  }
+
+  /**
+   * Map API task response to DartTask with snake_case field names
+   * Converts camelCase API fields to snake_case for consistency
+   */
+  private mapTaskResponse(task: any): DartTask {
+    return {
+      ...task,
+      dart_id: task.id || task.dart_id,
+      created_at: task.createdAt || task.created_at,
+      updated_at: task.updatedAt || task.updated_at,
+      due_at: task.dueAt ?? task.due_at,
+      start_at: task.startAt ?? task.start_at,
+      completed_at: task.completedAt ?? task.completed_at,
+      // Relationship fields: camelCase → snake_case
+      parent_task: task.parentId ?? task.parent_task,
+      subtask_ids: task.subtaskIds ?? task.subtask_ids ?? [],
+      blocker_ids: task.blockerIds ?? task.blocker_ids ?? [],
+      blocking_ids: task.blockingIds ?? task.blocking_ids ?? [],
+      duplicate_ids: task.duplicateIds ?? task.duplicate_ids ?? [],
+      related_ids: task.relatedIds ?? task.related_ids ?? [],
     };
   }
 
@@ -340,8 +365,8 @@ export class DartClient {
     if (!dartId || typeof dartId !== 'string' || dartId.trim() === '') {
       throw new DartAPIError('dart_id is required and must be a non-empty string', 400);
     }
-    const response = await this.request<{ item: DartTask }>('GET', `/tasks/${encodeURIComponent(dartId.trim())}`);
-    return response.item;
+    const response = await this.request<{ item: any }>('GET', `/tasks/${encodeURIComponent(dartId.trim())}`);
+    return this.mapTaskResponse(response.item);
   }
 
   /**
@@ -373,9 +398,16 @@ export class DartClient {
     if (updates.start_at !== undefined) apiUpdates.startAt = updates.start_at;
     if (updates.parent_task !== undefined) apiUpdates.parentId = updates.parent_task;
 
+    // Relationship fields: snake_case → camelCase
+    if (updates.subtask_ids !== undefined) apiUpdates.subtaskIds = updates.subtask_ids;
+    if (updates.blocker_ids !== undefined) apiUpdates.blockerIds = updates.blocker_ids;
+    if (updates.blocking_ids !== undefined) apiUpdates.blockingIds = updates.blocking_ids;
+    if (updates.duplicate_ids !== undefined) apiUpdates.duplicateIds = updates.duplicate_ids;
+    if (updates.related_ids !== undefined) apiUpdates.relatedIds = updates.related_ids;
+
     // Wrap updates in item object as required by API
-    const response = await this.request<{ item: DartTask }>('PUT', `/tasks/${encodeURIComponent(dart_id.trim())}`, { item: apiUpdates });
-    return response.item;
+    const response = await this.request<{ item: any }>('PUT', `/tasks/${encodeURIComponent(dart_id.trim())}`, { item: apiUpdates });
+    return this.mapTaskResponse(response.item);
   }
 
   /**

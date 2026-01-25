@@ -3,10 +3,53 @@
  */
 
 // ============================================================================
+// Task Relationship Types
+// ============================================================================
+
+/**
+ * TaskRelationships groups all task relationship arrays.
+ *
+ * All relationship fields are optional arrays of task dart_ids.
+ * These relationships allow tasks to be connected in various ways
+ * to model dependencies, duplicates, and related work items.
+ */
+export interface TaskRelationships {
+  /**
+   * IDs of tasks that are subtasks (children) of this task.
+   * Subtasks represent work that is part of completing the parent task.
+   */
+  subtask_ids?: string[];
+
+  /**
+   * IDs of tasks that block this task from being started or completed.
+   * This task cannot proceed until all blocker tasks are resolved.
+   */
+  blocker_ids?: string[];
+
+  /**
+   * IDs of tasks that this task is blocking.
+   * Those tasks cannot proceed until this task is resolved.
+   */
+  blocking_ids?: string[];
+
+  /**
+   * IDs of tasks that are duplicates of this task.
+   * Duplicate tasks represent the same work item created multiple times.
+   */
+  duplicate_ids?: string[];
+
+  /**
+   * IDs of tasks that are related to this task.
+   * Related tasks are loosely connected but not dependencies or duplicates.
+   */
+  related_ids?: string[];
+}
+
+// ============================================================================
 // Dart API Types
 // ============================================================================
 
-export interface DartTask {
+export interface DartTask extends TaskRelationships {
   dart_id: string;
   title: string;
   description?: string;
@@ -28,24 +71,39 @@ export interface DartTask {
 }
 
 export interface DartUser {
+  dart_id?: string;
   name: string;
   email?: string;
 }
 
 export interface DartBoard {
+  dart_id: string;
   name: string;
 }
 
 export interface DartStatus {
+  dart_id: string;
   name: string;
 }
 
 export interface DartTag {
+  dart_id: string;
   name: string;
 }
 
 export interface DartFolder {
+  dart_id: string;
   name: string;
+}
+
+export interface DartPriority {
+  value: number;
+  label: string;
+}
+
+export interface DartSize {
+  value: number;
+  label: string;
 }
 
 export interface DartDoc {
@@ -78,17 +136,83 @@ export interface DartConfig {
   today?: string;
   user?: DartUser;
   assignees: DartUser[];
-  dartboards: string[];
-  statuses: string[];
-  tags: string[];
-  priorities: string[];
-  sizes: string[];
-  folders: string[];
+  dartboards: DartBoard[];
+  statuses: DartStatus[];
+  tags: DartTag[];
+  priorities: DartPriority[];
+  sizes: DartSize[];
+  folders: DartFolder[];
   types?: string[];
   skills?: string[];
   customProperties?: Array<{ name: string; type: string; options?: string[] }>;
   cached_at?: string;
   cache_ttl_seconds?: number;
+}
+
+// ============================================================================
+// Config Helper Functions
+// ============================================================================
+
+/** Extract names from dartboards array for fuzzy matching */
+export function getDartboardNames(dartboards: DartBoard[]): string[] {
+  return dartboards.map(d => d.name);
+}
+
+/** Extract names from statuses array for fuzzy matching */
+export function getStatusNames(statuses: DartStatus[]): string[] {
+  return statuses.map(s => s.name);
+}
+
+/** Extract names from tags array for fuzzy matching */
+export function getTagNames(tags: DartTag[]): string[] {
+  return tags.map(t => t.name);
+}
+
+/** Extract names from folders array for fuzzy matching */
+export function getFolderNames(folders: DartFolder[]): string[] {
+  return folders.map(f => f.name);
+}
+
+/** Extract labels from priorities array for fuzzy matching */
+export function getPriorityLabels(priorities: DartPriority[]): string[] {
+  return priorities.map(p => p.label);
+}
+
+/** Extract labels from sizes array for fuzzy matching */
+export function getSizeLabels(sizes: DartSize[]): string[] {
+  return sizes.map(s => s.label);
+}
+
+/** Find dartboard by name or dart_id (case-insensitive) */
+export function findDartboard(dartboards: DartBoard[], input: string): DartBoard | undefined {
+  const normalized = input.toLowerCase().trim();
+  return dartboards.find(
+    d => d.name.toLowerCase() === normalized || d.dart_id.toLowerCase() === normalized
+  );
+}
+
+/** Find status by name or dart_id (case-insensitive) */
+export function findStatus(statuses: DartStatus[], input: string): DartStatus | undefined {
+  const normalized = input.toLowerCase().trim();
+  return statuses.find(
+    s => s.name.toLowerCase() === normalized || s.dart_id.toLowerCase() === normalized
+  );
+}
+
+/** Find tag by name or dart_id (case-insensitive) */
+export function findTag(tags: DartTag[], input: string): DartTag | undefined {
+  const normalized = input.toLowerCase().trim();
+  return tags.find(
+    t => t.name.toLowerCase() === normalized || t.dart_id.toLowerCase() === normalized
+  );
+}
+
+/** Find folder by name or dart_id (case-insensitive) */
+export function findFolder(folders: DartFolder[], input: string): DartFolder | undefined {
+  const normalized = input.toLowerCase().trim();
+  return folders.find(
+    f => f.name.toLowerCase() === normalized || f.dart_id.toLowerCase() === normalized
+  );
 }
 
 // ============================================================================
@@ -123,6 +247,17 @@ export interface CreateTaskInput {
   due_at?: string;
   start_at?: string;
   parent_task?: string;
+  // Relationship fields for initial creation
+  /** IDs of tasks that are subtasks (children) of this task */
+  subtask_ids?: string[];
+  /** IDs of tasks that block this task */
+  blocker_ids?: string[];
+  /** IDs of tasks that this task blocks */
+  blocking_ids?: string[];
+  /** IDs of tasks that are duplicates of this task */
+  duplicate_ids?: string[];
+  /** IDs of tasks that are related to this task */
+  related_ids?: string[];
 }
 
 export interface CreateTaskOutput {
@@ -136,12 +271,61 @@ export interface CreateTaskOutput {
 export interface GetTaskInput {
   dart_id: string;
   include_comments?: boolean;
+  /**
+   * Include relationship fields in response (default: true).
+   * When false, relationship arrays are omitted for smaller response.
+   */
+  include_relationships?: boolean;
+  /**
+   * Expand related task summaries (fetch titles for each related task).
+   * Requires additional API calls. Only applies when include_relationships is true.
+   */
+  expand_relationships?: boolean;
+}
+
+/**
+ * Summary of a related task (title only for compact display)
+ */
+export interface RelatedTaskSummary {
+  dart_id: string;
+  title: string;
+}
+
+/**
+ * Expanded relationship information with titles
+ */
+export interface ExpandedRelationships {
+  subtasks?: RelatedTaskSummary[];
+  blockers?: RelatedTaskSummary[];
+  blocking?: RelatedTaskSummary[];
+  duplicates?: RelatedTaskSummary[];
+  related?: RelatedTaskSummary[];
+}
+
+/**
+ * Relationship counts for quick overview
+ */
+export interface RelationshipCounts {
+  subtasks: number;
+  blockers: number;
+  blocking: number;
+  duplicates: number;
+  related: number;
+  total: number;
 }
 
 export interface GetTaskOutput {
   task: DartTask;
   comments?: DartComment[];
   url: string;
+  /**
+   * Relationship counts for quick overview (when include_relationships is true)
+   */
+  relationship_counts?: RelationshipCounts;
+  /**
+   * Expanded relationship details with titles (when expand_relationships is true)
+   */
+  expanded_relationships?: ExpandedRelationships;
 }
 
 export interface UpdateTaskInput {
@@ -171,13 +355,50 @@ export interface ListTasksInput {
   assignee?: string;
   status?: string;
   dartboard?: string;
-  priority?: string; // "critical", "high", "medium", "low"
+  priority?: string | number; // "critical", "high", "medium", "low" or numeric value 0-5
   tags?: string[];
   due_before?: string;
   due_after?: string;
   limit?: number;
   offset?: number;
   detail_level?: 'minimal' | 'standard' | 'full';
+
+  // Relationship filters (client-side filtering)
+  /**
+   * Filter tasks that have a parent task (true) or no parent task (false).
+   * Filters based on parent_task field being set or undefined.
+   */
+  has_parent?: boolean;
+
+  /**
+   * Filter tasks that have subtasks (true) or no subtasks (false).
+   * Filters based on subtask_ids array being non-empty or empty/undefined.
+   */
+  has_subtasks?: boolean;
+
+  /**
+   * Filter tasks that are blocked (true) or not blocked (false).
+   * Filters based on blocker_ids array being non-empty or empty/undefined.
+   */
+  has_blockers?: boolean;
+
+  /**
+   * Filter tasks that are blocking other tasks (true) or not blocking any (false).
+   * Filters based on blocking_ids array being non-empty or empty/undefined.
+   */
+  is_blocking?: boolean;
+
+  /**
+   * Filter tasks blocked by a specific task (by dart_id).
+   * Returns tasks where blocker_ids contains this dart_id.
+   */
+  blocked_by?: string;
+
+  /**
+   * Filter tasks that are blocking a specific task (by dart_id).
+   * Returns tasks where blocking_ids contains this dart_id.
+   */
+  blocking?: string;
 }
 
 export interface ListTasksOutput {
@@ -204,7 +425,12 @@ export interface BatchUpdateTasksOutput {
   batch_operation_id: string;
   selector_matched: number;
   dry_run: boolean;
-  preview_tasks?: Array<{ dart_id: string; title: string; current_values: Partial<DartTask> }>;
+  preview_tasks?: Array<{
+    dart_id: string;
+    title: string;
+    current_values: Partial<DartTask>;
+    new_values: Partial<DartTask>;
+  }>;
   successful_updates: number;
   failed_updates: number;
   successful_dart_ids: string[];

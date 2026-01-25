@@ -2,7 +2,12 @@
  * get_task Tool Handler
  *
  * Retrieves a single task by dart_id with optional comment inclusion.
- * Returns task details with deep link URL.
+ * Returns task details with deep link URL and relationship information.
+ *
+ * Features:
+ * - Relationship counts for quick overview
+ * - Optional expanded relationships with titles (requires additional API calls)
+ * - include_relationships parameter to omit relationship fields for smaller response
  */
 
 import { DartClient } from '../api/dartClient.js';
@@ -12,7 +17,102 @@ import {
   DartComment,
   GetTaskInput,
   GetTaskOutput,
+  RelationshipCounts,
+  ExpandedRelationships,
+  RelatedTaskSummary,
 } from '../types/index.js';
+
+/**
+ * Calculate relationship counts from a task
+ */
+function calculateRelationshipCounts(task: DartTask): RelationshipCounts {
+  const subtasks = task.subtask_ids?.length ?? 0;
+  const blockers = task.blocker_ids?.length ?? 0;
+  const blocking = task.blocking_ids?.length ?? 0;
+  const duplicates = task.duplicate_ids?.length ?? 0;
+  const related = task.related_ids?.length ?? 0;
+
+  return {
+    subtasks,
+    blockers,
+    blocking,
+    duplicates,
+    related,
+    total: subtasks + blockers + blocking + duplicates + related,
+  };
+}
+
+/**
+ * Fetch task titles for a list of dart_ids
+ * Returns summaries with dart_id and title only
+ */
+async function fetchTaskSummaries(
+  client: DartClient,
+  dartIds: string[]
+): Promise<RelatedTaskSummary[]> {
+  if (!dartIds || dartIds.length === 0) {
+    return [];
+  }
+
+  const summaries: RelatedTaskSummary[] = [];
+
+  // Fetch each task individually (API doesn't support batch get by IDs)
+  // Use Promise.allSettled to handle partial failures gracefully
+  const results = await Promise.allSettled(
+    dartIds.map(async (dartId) => {
+      const task = await client.getTask(dartId);
+      return {
+        dart_id: task.dart_id,
+        title: task.title,
+      };
+    })
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      summaries.push(result.value);
+    }
+    // For rejected promises, we skip the task (it may have been deleted)
+  }
+
+  return summaries;
+}
+
+/**
+ * Fetch expanded relationships with titles for all related tasks
+ */
+async function fetchExpandedRelationships(
+  client: DartClient,
+  task: DartTask
+): Promise<ExpandedRelationships> {
+  const expanded: ExpandedRelationships = {};
+
+  // Fetch all relationship types in parallel
+  const [subtasks, blockers, blocking, duplicates, related] = await Promise.all([
+    fetchTaskSummaries(client, task.subtask_ids ?? []),
+    fetchTaskSummaries(client, task.blocker_ids ?? []),
+    fetchTaskSummaries(client, task.blocking_ids ?? []),
+    fetchTaskSummaries(client, task.duplicate_ids ?? []),
+    fetchTaskSummaries(client, task.related_ids ?? []),
+  ]);
+
+  // Only include non-empty arrays
+  if (subtasks.length > 0) expanded.subtasks = subtasks;
+  if (blockers.length > 0) expanded.blockers = blockers;
+  if (blocking.length > 0) expanded.blocking = blocking;
+  if (duplicates.length > 0) expanded.duplicates = duplicates;
+  if (related.length > 0) expanded.related = related;
+
+  return expanded;
+}
+
+/**
+ * Remove relationship fields from task for compact response
+ */
+function stripRelationshipFields(task: DartTask): DartTask {
+  const { subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids, ...taskWithoutRelationships } = task;
+  return taskWithoutRelationships as DartTask;
+}
 
 /**
  * Handle get_task tool calls
@@ -22,10 +122,12 @@ import {
  * 2. Call DartClient.getTask()
  * 3. Generate deep link URL
  * 4. Optionally fetch comments (if include_comments=true)
- * 5. Return GetTaskOutput with task, url, and optional comments
+ * 5. Calculate relationship counts (if include_relationships=true, default)
+ * 6. Optionally fetch expanded relationships (if expand_relationships=true)
+ * 7. Return GetTaskOutput with task, url, and optional comments/relationships
  *
- * @param input - GetTaskInput with dart_id and optional include_comments
- * @returns GetTaskOutput with task details, url, and optional comments
+ * @param input - GetTaskInput with dart_id and optional include_comments, include_relationships, expand_relationships
+ * @returns GetTaskOutput with task details, url, and optional comments/relationships
  * @throws DartAPIError with 404 status if task not found
  */
 export async function handleGetTask(input: GetTaskInput): Promise<GetTaskOutput> {
@@ -54,6 +156,10 @@ export async function handleGetTask(input: GetTaskInput): Promise<GetTaskOutput>
       400
     );
   }
+
+  // Default include_relationships to true
+  const includeRelationships = input.include_relationships !== false;
+  const expandRelationships = input.expand_relationships === true;
 
   // ============================================================================
   // Step 2: Call DartClient.getTask()
@@ -109,16 +215,30 @@ export async function handleGetTask(input: GetTaskInput): Promise<GetTaskOutput>
   }
 
   // ============================================================================
-  // Step 5: Return output
+  // Step 5: Build output with relationship information
   // ============================================================================
   const output: GetTaskOutput = {
-    task,
+    // If include_relationships is false, strip the relationship fields from task
+    task: includeRelationships ? task : stripRelationshipFields(task),
     url: deepLinkUrl,
   };
 
   // Only include comments field if include_comments was requested
   if (input.include_comments) {
     output.comments = comments;
+  }
+
+  // ============================================================================
+  // Step 6: Add relationship counts and expanded relationships
+  // ============================================================================
+  if (includeRelationships) {
+    // Always include relationship counts when relationships are included
+    output.relationship_counts = calculateRelationshipCounts(task);
+
+    // Optionally fetch expanded relationships (titles for related tasks)
+    if (expandRelationships) {
+      output.expanded_relationships = await fetchExpandedRelationships(client, task);
+    }
   }
 
   return output;
