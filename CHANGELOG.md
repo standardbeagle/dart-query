@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-01-25
+
+### Added
+- **New tools for comprehensive task management:**
+  - `list_comments` - List comments on a task with pagination
+  - `move_task` - Reposition task within dartboard or move to different dartboard
+  - `add_time_tracking` - Add time tracking entries to tasks
+  - `attach_url` - Attach files from URL to tasks
+  - `get_dartboard` - Get dartboard details including task count
+  - `get_folder` - Get folder details including doc count
+- DartClient methods for all new API endpoints
+- Token-efficient response formats for new tools
+
+### Changed
+- Tool count increased from 18 to 24
+- Improved DartComment type with optional parent_id for threaded comments
+
 ## [0.2.0] - 2026-01-25
 
 ### Added

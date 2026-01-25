@@ -26,7 +26,12 @@ import { handleUpdateDoc } from './tools/update_doc.js';
 import { handleDeleteDoc } from './tools/delete_doc.js';
 import { handleSearchTasks } from './tools/search_tasks.js';
 import { handleAddTaskComment } from './tools/add_task_comment.js';
-// ... other imports
+import { handleListComments } from './tools/list_comments.js';
+import { handleMoveTask } from './tools/move_task.js';
+import { handleAddTimeTracking } from './tools/add_time_tracking.js';
+import { handleAttachUrl } from './tools/attach_url.js';
+import { handleGetDartboard } from './tools/get_dartboard.js';
+import { handleGetFolder } from './tools/get_folder.js';
 
 // Validate DART_TOKEN on startup
 const DART_TOKEN = process.env.DART_TOKEN;
@@ -710,6 +715,142 @@ class DartQueryServer {
             required: ['dart_id', 'text'],
           },
         },
+        {
+          name: 'list_comments',
+          description: 'List comments on a task with pagination. Token-efficient: returns minimal comment data.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              task_id: {
+                type: 'string',
+                description: 'Task dart_id to list comments for',
+              },
+              limit: {
+                type: 'integer',
+                description: 'Max comments to return (default: 50, max: 100)',
+              },
+              offset: {
+                type: 'integer',
+                description: 'Pagination offset (default: 0)',
+              },
+            },
+            required: ['task_id'],
+          },
+        },
+
+        // Task Operations
+        {
+          name: 'move_task',
+          description: 'Move/reposition a task within a dartboard or to a different dartboard. Supports ordering by index or relative to another task.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dart_id: {
+                type: 'string',
+                description: 'Task dart_id to move',
+              },
+              dartboard: {
+                type: 'string',
+                description: 'Target dartboard (dart_id or name) - moves task to different dartboard',
+              },
+              order: {
+                type: 'integer',
+                description: 'Position index in dartboard (0-based)',
+              },
+              after_id: {
+                type: 'string',
+                description: 'Place task after this task dart_id',
+              },
+              before_id: {
+                type: 'string',
+                description: 'Place task before this task dart_id',
+              },
+            },
+            required: ['dart_id'],
+          },
+        },
+        {
+          name: 'add_time_tracking',
+          description: 'Add a time tracking entry to a task. Supports started_at/finished_at or duration_minutes.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dart_id: {
+                type: 'string',
+                description: 'Task dart_id to add time entry to',
+              },
+              started_at: {
+                type: 'string',
+                description: 'Start time in ISO8601 format (e.g., 2026-01-25T10:00:00Z)',
+              },
+              finished_at: {
+                type: 'string',
+                description: 'End time in ISO8601 format (optional if duration_minutes provided)',
+              },
+              duration_minutes: {
+                type: 'integer',
+                description: 'Duration in minutes (optional if finished_at provided)',
+              },
+              note: {
+                type: 'string',
+                description: 'Optional note about the time entry',
+              },
+            },
+            required: ['dart_id', 'started_at'],
+          },
+        },
+        {
+          name: 'attach_url',
+          description: 'Attach a file from URL to a task. URL must be publicly accessible.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dart_id: {
+                type: 'string',
+                description: 'Task dart_id to attach file to',
+              },
+              url: {
+                type: 'string',
+                description: 'Public URL of file to attach',
+              },
+              filename: {
+                type: 'string',
+                description: 'Optional filename override',
+              },
+            },
+            required: ['dart_id', 'url'],
+          },
+        },
+
+        // Workspace Navigation
+        {
+          name: 'get_dartboard',
+          description: 'Get details about a dartboard including task count. Token-efficient lookup.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dartboard_id: {
+                type: 'string',
+                description: 'Dartboard dart_id or name',
+              },
+            },
+            required: ['dartboard_id'],
+          },
+        },
+        {
+          name: 'get_folder',
+          description: 'Get details about a folder including doc count. Token-efficient lookup.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              folder_id: {
+                type: 'string',
+                description: 'Folder dart_id or name',
+              },
+            },
+            required: ['folder_id'],
+          },
+        },
       ],
     }));
 
@@ -925,6 +1066,78 @@ class DartQueryServer {
 
           case 'add_task_comment': {
             const result = await handleAddTaskComment((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'list_comments': {
+            const result = await handleListComments((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'move_task': {
+            const result = await handleMoveTask((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'add_time_tracking': {
+            const result = await handleAddTimeTracking((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'attach_url': {
+            const result = await handleAttachUrl((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'get_dartboard': {
+            const result = await handleGetDartboard((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'get_folder': {
+            const result = await handleGetFolder((args || {}) as any);
             return {
               content: [
                 {

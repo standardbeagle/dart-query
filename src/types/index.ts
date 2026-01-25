@@ -119,13 +119,14 @@ export interface DartDoc {
 
 export interface DartComment {
   comment_id: string;
-  dart_id: string; // task id
+  dart_id?: string; // task id (optional in list responses)
   text: string;
   author: {
     dart_id: string;
     name: string;
   };
   created_at: string;
+  parent_id?: string; // For threaded comments
 }
 
 // ============================================================================
@@ -687,4 +688,118 @@ export class DartQLParseError extends Error {
     super(message);
     this.name = 'DartQLParseError';
   }
+}
+
+// ============================================================================
+// List Comments Types
+// ============================================================================
+
+export interface ListCommentsInput {
+  task_id: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListCommentsOutput {
+  comments: DartComment[];
+  total_count: number;
+  returned_count: number;
+  has_more: boolean;
+  next_offset: number | null;
+  task_id: string;
+}
+
+// ============================================================================
+// Move Task Types
+// ============================================================================
+
+export interface MoveTaskInput {
+  dart_id: string;
+  dartboard?: string;
+  order?: number;
+  after_id?: string;
+  before_id?: string;
+}
+
+export interface MoveTaskOutput {
+  dart_id: string;
+  dartboard: string;
+  task: DartTask;
+  url: string;
+}
+
+// ============================================================================
+// Time Tracking Types
+// ============================================================================
+
+export interface AddTimeTrackingInput {
+  dart_id: string;
+  started_at: string;
+  finished_at?: string;
+  duration_minutes?: number;
+  note?: string;
+}
+
+export interface TimeTrackingEntry {
+  entry_id: string;
+  dart_id: string;
+  started_at: string;
+  finished_at?: string;
+  duration_minutes: number;
+  note?: string;
+}
+
+export interface AddTimeTrackingOutput {
+  entry: TimeTrackingEntry;
+  task_id: string;
+  url: string;
+}
+
+// ============================================================================
+// Attach URL Types
+// ============================================================================
+
+export interface AttachUrlInput {
+  dart_id: string;
+  url: string;
+  filename?: string;
+}
+
+export interface AttachUrlOutput {
+  attachment_id: string;
+  dart_id: string;
+  url: string;
+  filename: string;
+  task_url: string;
+}
+
+// ============================================================================
+// Dartboard Types
+// ============================================================================
+
+export interface GetDartboardInput {
+  dartboard_id: string;
+}
+
+export interface GetDartboardOutput {
+  dart_id: string;
+  name: string;
+  description?: string;
+  task_count?: number;
+  url: string;
+}
+
+// ============================================================================
+// Folder Types
+// ============================================================================
+
+export interface GetFolderInput {
+  folder_id: string;
+}
+
+export interface GetFolderOutput {
+  dart_id: string;
+  name: string;
+  doc_count?: number;
+  url: string;
 }

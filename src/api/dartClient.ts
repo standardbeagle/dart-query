@@ -525,4 +525,211 @@ export class DartClient {
       created_at: string;
     }>('POST', `/tasks/${encodeURIComponent(dartId.trim())}/comments`, { text });
   }
+
+  /**
+   * List comments on a task
+   */
+  async listComments(input: {
+    task_id: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    comments: Array<{
+      comment_id: string;
+      text: string;
+      author: { dart_id: string; name: string };
+      created_at: string;
+      parent_id?: string;
+    }>;
+    total: number;
+  }> {
+    if (!input.task_id || typeof input.task_id !== 'string' || input.task_id.trim() === '') {
+      throw new DartAPIError('task_id is required and must be a non-empty string', 400);
+    }
+
+    const queryParams = new URLSearchParams();
+    queryParams.append('task', input.task_id.trim());
+    if (input.limit !== undefined) queryParams.append('limit', input.limit.toString());
+    if (input.offset !== undefined) queryParams.append('offset', input.offset.toString());
+
+    const response = await this.request<{ count: number; results: any[] }>(
+      'GET',
+      `/comments/list?${queryParams.toString()}`
+    );
+
+    return {
+      comments: (response.results || []).map((c: any) => ({
+        comment_id: c.id || c.comment_id,
+        text: c.text,
+        author: c.author || { dart_id: '', name: 'Unknown' },
+        created_at: c.publishedAt || c.created_at,
+        parent_id: c.parentId || c.parent_id,
+      })),
+      total: response.count || 0,
+    };
+  }
+
+  /**
+   * Move/reposition a task within a dartboard
+   */
+  async moveTask(input: {
+    dart_id: string;
+    dartboard?: string;
+    order?: number;
+    after_id?: string;
+    before_id?: string;
+  }): Promise<DartTask> {
+    if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
+      throw new DartAPIError('dart_id is required and must be a non-empty string', 400);
+    }
+
+    const apiInput: Record<string, unknown> = {};
+    if (input.dartboard !== undefined) apiInput.dartboard = input.dartboard;
+    if (input.order !== undefined) apiInput.order = input.order;
+    if (input.after_id !== undefined) apiInput.afterId = input.after_id;
+    if (input.before_id !== undefined) apiInput.beforeId = input.before_id;
+
+    const response = await this.request<{ item: any }>(
+      'POST',
+      `/tasks/${encodeURIComponent(input.dart_id.trim())}/move`,
+      apiInput
+    );
+    return this.mapTaskResponse(response.item);
+  }
+
+  /**
+   * Add time tracking entry to a task
+   */
+  async addTimeTracking(input: {
+    dart_id: string;
+    started_at: string;
+    finished_at?: string;
+    duration_minutes?: number;
+    note?: string;
+  }): Promise<{
+    entry_id: string;
+    dart_id: string;
+    started_at: string;
+    finished_at?: string;
+    duration_minutes: number;
+    note?: string;
+  }> {
+    if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
+      throw new DartAPIError('dart_id is required and must be a non-empty string', 400);
+    }
+    if (!input.started_at || typeof input.started_at !== 'string') {
+      throw new DartAPIError('started_at is required and must be an ISO8601 string', 400);
+    }
+
+    const apiInput: Record<string, unknown> = {
+      startedAt: input.started_at,
+    };
+    if (input.finished_at !== undefined) apiInput.finishedAt = input.finished_at;
+    if (input.duration_minutes !== undefined) apiInput.durationMinutes = input.duration_minutes;
+    if (input.note !== undefined) apiInput.note = input.note;
+
+    const response = await this.request<{ item: any }>(
+      'POST',
+      `/tasks/${encodeURIComponent(input.dart_id.trim())}/time-tracking`,
+      apiInput
+    );
+
+    return {
+      entry_id: response.item?.id || '',
+      dart_id: input.dart_id,
+      started_at: response.item?.startedAt || input.started_at,
+      finished_at: response.item?.finishedAt,
+      duration_minutes: response.item?.durationMinutes || input.duration_minutes || 0,
+      note: response.item?.note,
+    };
+  }
+
+  /**
+   * Attach a file from URL to a task
+   */
+  async attachUrl(input: {
+    dart_id: string;
+    url: string;
+    filename?: string;
+  }): Promise<{
+    attachment_id: string;
+    dart_id: string;
+    url: string;
+    filename: string;
+  }> {
+    if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
+      throw new DartAPIError('dart_id is required and must be a non-empty string', 400);
+    }
+    if (!input.url || typeof input.url !== 'string' || input.url.trim() === '') {
+      throw new DartAPIError('url is required and must be a non-empty string', 400);
+    }
+
+    const apiInput: Record<string, unknown> = {
+      url: input.url,
+    };
+    if (input.filename !== undefined) apiInput.filename = input.filename;
+
+    const response = await this.request<{ item: any }>(
+      'POST',
+      `/tasks/${encodeURIComponent(input.dart_id.trim())}/attachments/from-url`,
+      apiInput
+    );
+
+    return {
+      attachment_id: response.item?.id || '',
+      dart_id: input.dart_id,
+      url: response.item?.url || input.url,
+      filename: response.item?.filename || input.filename || '',
+    };
+  }
+
+  /**
+   * Get dartboard details
+   */
+  async getDartboard(dartboardId: string): Promise<{
+    dart_id: string;
+    name: string;
+    description?: string;
+    task_count?: number;
+  }> {
+    if (!dartboardId || typeof dartboardId !== 'string' || dartboardId.trim() === '') {
+      throw new DartAPIError('dartboard_id is required and must be a non-empty string', 400);
+    }
+
+    const response = await this.request<{ item: any }>(
+      'GET',
+      `/dartboards/${encodeURIComponent(dartboardId.trim())}`
+    );
+
+    return {
+      dart_id: response.item?.id || dartboardId,
+      name: response.item?.title || response.item?.name || '',
+      description: response.item?.description,
+      task_count: response.item?.taskCount,
+    };
+  }
+
+  /**
+   * Get folder with contained docs
+   */
+  async getFolder(folderId: string): Promise<{
+    dart_id: string;
+    name: string;
+    doc_count?: number;
+  }> {
+    if (!folderId || typeof folderId !== 'string' || folderId.trim() === '') {
+      throw new DartAPIError('folder_id is required and must be a non-empty string', 400);
+    }
+
+    const response = await this.request<{ item: any }>(
+      'GET',
+      `/folders/${encodeURIComponent(folderId.trim())}`
+    );
+
+    return {
+      dart_id: response.item?.id || folderId,
+      name: response.item?.title || response.item?.name || '',
+      doc_count: response.item?.docCount,
+    };
+  }
 }
