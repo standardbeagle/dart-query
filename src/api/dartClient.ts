@@ -338,8 +338,17 @@ export class DartClient {
   /**
    * Map API task response to DartTask with snake_case field names
    * Converts camelCase API fields to snake_case for consistency
+   *
+   * The Dart API returns relationships in two possible locations:
+   * 1. Directly on the task object (subtaskIds, blockerIds, etc.)
+   * 2. Nested in taskRelationships object (taskRelationships.subtaskIds, etc.)
+   *
+   * This function extracts from both locations with taskRelationships taking precedence.
    */
   private mapTaskResponse(task: any): DartTask {
+    // Extract relationships from nested taskRelationships object if present
+    const relationships = task.taskRelationships || {};
+
     return {
       ...task,
       dart_id: task.id || task.dart_id,
@@ -348,13 +357,13 @@ export class DartClient {
       due_at: task.dueAt ?? task.due_at,
       start_at: task.startAt ?? task.start_at,
       completed_at: task.completedAt ?? task.completed_at,
-      // Relationship fields: camelCase → snake_case
+      // Relationship fields: check taskRelationships first, then direct fields, then snake_case
       parent_task: task.parentId ?? task.parent_task,
-      subtask_ids: task.subtaskIds ?? task.subtask_ids ?? [],
-      blocker_ids: task.blockerIds ?? task.blocker_ids ?? [],
-      blocking_ids: task.blockingIds ?? task.blocking_ids ?? [],
-      duplicate_ids: task.duplicateIds ?? task.duplicate_ids ?? [],
-      related_ids: task.relatedIds ?? task.related_ids ?? [],
+      subtask_ids: relationships.subtaskIds ?? task.subtaskIds ?? task.subtask_ids ?? [],
+      blocker_ids: relationships.blockerIds ?? task.blockerIds ?? task.blocker_ids ?? [],
+      blocking_ids: relationships.blockingIds ?? task.blockingIds ?? task.blocking_ids ?? [],
+      duplicate_ids: relationships.duplicateIds ?? task.duplicateIds ?? task.duplicate_ids ?? [],
+      related_ids: relationships.relatedIds ?? task.relatedIds ?? task.related_ids ?? [],
     };
   }
 
