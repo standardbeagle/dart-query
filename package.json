@@ -1,6 +1,6 @@
 {
   "name": "@standardbeagle/dart-query",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Production-ready MCP server for Dart AI task management with batch operations, SQL-like selectors, CSV import, and zero context rot",
   "type": "module",
   "main": "dist/index.js",
