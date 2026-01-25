@@ -188,7 +188,7 @@ export function getSizeLabels(sizes: DartSize[]): string[] {
 export function findDartboard(dartboards: DartBoard[], input: string): DartBoard | undefined {
   const normalized = input.toLowerCase().trim();
   return dartboards.find(
-    d => d.name.toLowerCase() === normalized || d.dart_id.toLowerCase() === normalized
+    d => d.name?.toLowerCase() === normalized || d.dart_id?.toLowerCase() === normalized
   );
 }
 
@@ -196,7 +196,7 @@ export function findDartboard(dartboards: DartBoard[], input: string): DartBoard
 export function findStatus(statuses: DartStatus[], input: string): DartStatus | undefined {
   const normalized = input.toLowerCase().trim();
   return statuses.find(
-    s => s.name.toLowerCase() === normalized || s.dart_id.toLowerCase() === normalized
+    s => s.name?.toLowerCase() === normalized || s.dart_id?.toLowerCase() === normalized
   );
 }
 
@@ -204,7 +204,7 @@ export function findStatus(statuses: DartStatus[], input: string): DartStatus | 
 export function findTag(tags: DartTag[], input: string): DartTag | undefined {
   const normalized = input.toLowerCase().trim();
   return tags.find(
-    t => t.name.toLowerCase() === normalized || t.dart_id.toLowerCase() === normalized
+    t => t.name?.toLowerCase() === normalized || t.dart_id?.toLowerCase() === normalized
   );
 }
 
@@ -212,7 +212,7 @@ export function findTag(tags: DartTag[], input: string): DartTag | undefined {
 export function findFolder(folders: DartFolder[], input: string): DartFolder | undefined {
   const normalized = input.toLowerCase().trim();
   return folders.find(
-    f => f.name.toLowerCase() === normalized || f.dart_id.toLowerCase() === normalized
+    f => f.name?.toLowerCase() === normalized || f.dart_id?.toLowerCase() === normalized
   );
 }
 

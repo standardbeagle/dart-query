@@ -226,8 +226,8 @@ async function resolveFilters(
 
     const assignee = config.assignees.find(
       (a) =>
-        a.name.toLowerCase() === assigneeInput.toLowerCase() ||
-        (a.email && a.email.toLowerCase() === assigneeInput.toLowerCase())
+        a.name?.toLowerCase() === assigneeInput.toLowerCase() ||
+        a.email?.toLowerCase() === assigneeInput.toLowerCase()
     );
 
     if (!assignee) {

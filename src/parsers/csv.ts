@@ -510,8 +510,8 @@ export function resolveReferences(
       });
     } else {
       const dartboard = config.dartboards.find(
-        d => d.name.toLowerCase() === dartboardInput.toLowerCase() ||
-             d.dart_id.toLowerCase() === dartboardInput.toLowerCase()
+        d => d.name?.toLowerCase() === dartboardInput.toLowerCase() ||
+             d.dart_id?.toLowerCase() === dartboardInput.toLowerCase()
       );
 
       if (dartboard) {
@@ -543,8 +543,8 @@ export function resolveReferences(
   if (row.status) {
     const statusInput = row.status.trim();
     const status = config.statuses.find(
-      s => s.name.toLowerCase() === statusInput.toLowerCase() ||
-           s.dart_id.toLowerCase() === statusInput.toLowerCase()
+      s => s.name?.toLowerCase() === statusInput.toLowerCase() ||
+           s.dart_id?.toLowerCase() === statusInput.toLowerCase()
     );
 
     if (status) {
@@ -575,9 +575,9 @@ export function resolveReferences(
   if (row.assignee) {
     const assigneeInput = row.assignee.trim();
     const assignee = config.assignees.find(
-      a => (a.email && a.email.toLowerCase() === assigneeInput.toLowerCase()) ||
-           a.name.toLowerCase() === assigneeInput.toLowerCase() ||
-           (a.dart_id && a.dart_id.toLowerCase() === assigneeInput.toLowerCase())
+      a => a.email?.toLowerCase() === assigneeInput.toLowerCase() ||
+           a.name?.toLowerCase() === assigneeInput.toLowerCase() ||
+           a.dart_id?.toLowerCase() === assigneeInput.toLowerCase()
     );
 
     if (assignee) {
@@ -637,8 +637,8 @@ export function resolveReferences(
 
         for (const tagInput of tagInputNames) {
           const tag = config.tags.find(
-            t => t.name.toLowerCase() === tagInput.toLowerCase() ||
-                 t.dart_id.toLowerCase() === tagInput.toLowerCase()
+            t => t.name?.toLowerCase() === tagInput.toLowerCase() ||
+                 t.dart_id?.toLowerCase() === tagInput.toLowerCase()
           );
 
           if (tag) {
@@ -830,8 +830,8 @@ export function validateRow(
   if (row.status) {
     const statusInput = row.status.trim();
     const status = config.statuses.find(
-      s => s.name.toLowerCase() === statusInput.toLowerCase() ||
-           s.dart_id.toLowerCase() === statusInput.toLowerCase()
+      s => s.name?.toLowerCase() === statusInput.toLowerCase() ||
+           s.dart_id?.toLowerCase() === statusInput.toLowerCase()
     );
 
     if (!status) {
@@ -848,9 +848,9 @@ export function validateRow(
   if (row.assignee) {
     const assigneeInput = row.assignee.trim();
     const assignee = config.assignees.find(
-      a => (a.email && a.email.toLowerCase() === assigneeInput.toLowerCase()) ||
-           a.name.toLowerCase() === assigneeInput.toLowerCase() ||
-           (a.dart_id && a.dart_id.toLowerCase() === assigneeInput.toLowerCase())
+      a => a.email?.toLowerCase() === assigneeInput.toLowerCase() ||
+           a.name?.toLowerCase() === assigneeInput.toLowerCase() ||
+           a.dart_id?.toLowerCase() === assigneeInput.toLowerCase()
     );
 
     if (!assignee) {
