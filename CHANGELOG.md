@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-01-25
+
+### Added
+- **Token-efficient table formatter module** for high-density query output:
+  - `tableFormatter.ts` - Core formatting with 5 output modes
+  - `fieldSelector.ts` - Field selection parser with SELECT...WHERE syntax
+  - `relationshipExpander.ts` - Batch relationship expansion with title summaries
+- Output format options: `table`, `compact`, `csv`, `json`, `ids`
+- Essential fields default: `id`, `title`, `status`, `pri`, `assignee`, `due`
+- Field modifiers: `#` for counts, `+` for expansion, `*` for all fields
+- Query syntax: `SELECT id,title,due WHERE status = 'Todo' format=compact`
+- Abbreviation helpers for IDs (`..def456`), dates, priorities (`C/H/M/L`)
+- 103 new tests for formatter module
+
+### Changed
+- DartConfig now accepts union types (`Object | string`) for dartboards, statuses, and tags
+- Added helper functions: `getDartboardId`, `getDartboardName`, `getStatusId`, `getTagId`
+- Updated `findDartboard`, `findStatus`, `findTag` to handle both object and string formats
+
+### Fixed
+- Type errors when processing API responses that return entities as plain strings
+
 ## [0.3.0] - 2026-01-25
 
 ### Added
