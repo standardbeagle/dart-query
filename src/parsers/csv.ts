@@ -509,16 +509,19 @@ export function resolveReferences(
         value: row.dartboard,
       });
     } else {
-      const dartboard = config.dartboards.find(
-        d => d.name?.toLowerCase() === dartboardInput.toLowerCase() ||
-             d.dart_id?.toLowerCase() === dartboardInput.toLowerCase()
-      );
+      const dartboard = config.dartboards.find(d => {
+        if (typeof d === 'string') {
+          return d.toLowerCase() === dartboardInput.toLowerCase();
+        }
+        return d.name?.toLowerCase() === dartboardInput.toLowerCase() ||
+               d.dart_id?.toLowerCase() === dartboardInput.toLowerCase();
+      });
 
       if (dartboard) {
-        resolved.dartboard = dartboard.dart_id;
+        resolved.dartboard = typeof dartboard === 'string' ? dartboard : dartboard.dart_id;
       } else {
         // Try fuzzy matching on names
-        const dartboardNames = config.dartboards.map(d => d.name);
+        const dartboardNames = config.dartboards.map(d => typeof d === 'string' ? d : d.name);
         const matches = findClosestMatches(dartboardInput, dartboardNames);
 
         errors.push({
@@ -542,16 +545,19 @@ export function resolveReferences(
   // Resolve status (name → dart_id)
   if (row.status) {
     const statusInput = row.status.trim();
-    const status = config.statuses.find(
-      s => s.name?.toLowerCase() === statusInput.toLowerCase() ||
-           s.dart_id?.toLowerCase() === statusInput.toLowerCase()
-    );
+    const status = config.statuses.find(s => {
+      if (typeof s === 'string') {
+        return s.toLowerCase() === statusInput.toLowerCase();
+      }
+      return s.name?.toLowerCase() === statusInput.toLowerCase() ||
+             s.dart_id?.toLowerCase() === statusInput.toLowerCase();
+    });
 
     if (status) {
-      resolved.status = status.dart_id;
+      resolved.status = typeof status === 'string' ? status : status.dart_id;
     } else {
       // Try fuzzy matching on names
-      const statusNames = config.statuses.map(s => s.name);
+      const statusNames = config.statuses.map(s => typeof s === 'string' ? s : s.name);
       const matches = findClosestMatches(statusInput, statusNames);
 
       errors.push({
@@ -636,16 +642,19 @@ export function resolveReferences(
         let hasTagErrors = false;
 
         for (const tagInput of tagInputNames) {
-          const tag = config.tags.find(
-            t => t.name?.toLowerCase() === tagInput.toLowerCase() ||
-                 t.dart_id?.toLowerCase() === tagInput.toLowerCase()
-          );
+          const tag = config.tags.find(t => {
+            if (typeof t === 'string') {
+              return t.toLowerCase() === tagInput.toLowerCase();
+            }
+            return t.name?.toLowerCase() === tagInput.toLowerCase() ||
+                   t.dart_id?.toLowerCase() === tagInput.toLowerCase();
+          });
 
           if (tag) {
-            resolvedTags.push(tag.dart_id);
+            resolvedTags.push(typeof tag === 'string' ? tag : tag.dart_id);
           } else {
             // Try fuzzy matching on names
-            const tagNames = config.tags.map(t => t.name);
+            const tagNames = config.tags.map(t => typeof t === 'string' ? t : t.name);
             const matches = findClosestMatches(tagInput, tagNames);
 
             errors.push({
@@ -811,10 +820,13 @@ export function validateRow(
   // Validate dartboard exists (reference validation)
   if (row.dartboard) {
     const dartboardInput = row.dartboard.trim();
-    const dartboard = config.dartboards.find(
-      d => d.name.toLowerCase() === dartboardInput.toLowerCase() ||
-           d.dart_id.toLowerCase() === dartboardInput.toLowerCase()
-    );
+    const dartboard = config.dartboards.find(d => {
+      if (typeof d === 'string') {
+        return d.toLowerCase() === dartboardInput.toLowerCase();
+      }
+      return d.name.toLowerCase() === dartboardInput.toLowerCase() ||
+             d.dart_id.toLowerCase() === dartboardInput.toLowerCase();
+    });
 
     if (!dartboard) {
       errors.push({
@@ -829,10 +841,13 @@ export function validateRow(
   // Validate status exists (reference validation)
   if (row.status) {
     const statusInput = row.status.trim();
-    const status = config.statuses.find(
-      s => s.name?.toLowerCase() === statusInput.toLowerCase() ||
-           s.dart_id?.toLowerCase() === statusInput.toLowerCase()
-    );
+    const status = config.statuses.find(s => {
+      if (typeof s === 'string') {
+        return s.toLowerCase() === statusInput.toLowerCase();
+      }
+      return s.name?.toLowerCase() === statusInput.toLowerCase() ||
+             s.dart_id?.toLowerCase() === statusInput.toLowerCase();
+    });
 
     if (!status) {
       errors.push({
@@ -869,10 +884,13 @@ export function validateRow(
     const tagInputNames = tagsInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
     for (const tagInput of tagInputNames) {
-      const tag = config.tags.find(
-        t => t.name.toLowerCase() === tagInput.toLowerCase() ||
-             t.dart_id.toLowerCase() === tagInput.toLowerCase()
-      );
+      const tag = config.tags.find(t => {
+        if (typeof t === 'string') {
+          return t.toLowerCase() === tagInput.toLowerCase();
+        }
+        return t.name.toLowerCase() === tagInput.toLowerCase() ||
+               t.dart_id.toLowerCase() === tagInput.toLowerCase();
+      });
 
       if (!tag) {
         errors.push({

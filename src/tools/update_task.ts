@@ -165,7 +165,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    resolvedUpdates.dartboard = dartboard.dart_id;
+    resolvedUpdates.dartboard = typeof dartboard === 'string' ? dartboard : dartboard.dart_id;
   }
 
   // ============================================================================
@@ -191,7 +191,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    resolvedUpdates.status = status.dart_id;
+    resolvedUpdates.status = typeof status === 'string' ? status : status.dart_id;
   }
 
   // ============================================================================
@@ -295,7 +295,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
         if (!tag) {
           invalidTags.push(tagInput);
         } else {
-          resolvedTags.push(tag.dart_id);
+          resolvedTags.push(typeof tag === 'string' ? tag : tag.dart_id);
         }
       }
 

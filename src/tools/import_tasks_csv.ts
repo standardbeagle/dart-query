@@ -172,7 +172,7 @@ export async function handleImportTasksCSV(
     );
   }
 
-  const dartboardId = dartboard.dart_id;
+  const dartboardId = typeof dartboard === 'string' ? dartboard : dartboard.dart_id;
 
   // ============================================================================
   // Phase 4: Validate ALL rows - collect errors for all rows

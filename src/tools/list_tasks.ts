@@ -266,7 +266,7 @@ async function resolveFilters(
     }
 
     // Return dart_id for API filtering
-    resolved.status = status.dart_id;
+    resolved.status = typeof status === 'string' ? status : status.dart_id;
   }
 
   // Resolve dartboard (dart_id or name)
@@ -293,7 +293,7 @@ async function resolveFilters(
     }
 
     // Return dart_id for API filtering
-    resolved.dartboard = dartboard.dart_id;
+    resolved.dartboard = typeof dartboard === 'string' ? dartboard : dartboard.dart_id;
   }
 
   // Resolve tags (dart_ids or names)
@@ -329,7 +329,7 @@ async function resolveFilters(
       }
 
       // Return dart_id for API filtering
-      resolvedTags.push(tag.dart_id);
+      resolvedTags.push(typeof tag === 'string' ? tag : tag.dart_id);
     }
 
     resolved.tags = resolvedTags;

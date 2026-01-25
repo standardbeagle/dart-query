@@ -55,13 +55,15 @@ export async function handleGetDartboard(input: GetDartboardInput): Promise<GetD
   }
 
   const client = new DartClient({ token: DART_TOKEN });
+  const dartboardId = typeof dartboard === 'string' ? dartboard : dartboard.dart_id;
+  const dartboardName = typeof dartboard === 'string' ? dartboard : dartboard.name;
 
   try {
-    const result = await client.getDartboard(dartboard.dart_id);
+    const result = await client.getDartboard(dartboardId);
 
     return {
       dart_id: result.dart_id,
-      name: result.name || dartboard.name,
+      name: result.name || dartboardName,
       description: result.description,
       task_count: result.task_count,
       url: `https://app.dartai.com/b/${result.dart_id}`,
@@ -70,9 +72,9 @@ export async function handleGetDartboard(input: GetDartboardInput): Promise<GetD
     // If API call fails, return basic info from config
     if (error instanceof DartAPIError && error.statusCode === 404) {
       return {
-        dart_id: dartboard.dart_id,
-        name: dartboard.name,
-        url: `https://app.dartai.com/b/${dartboard.dart_id}`,
+        dart_id: dartboardId,
+        name: dartboardName,
+        url: `https://app.dartai.com/b/${dartboardId}`,
       };
     }
     throw error;

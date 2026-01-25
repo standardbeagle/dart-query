@@ -137,9 +137,9 @@ export interface DartConfig {
   today?: string;
   user?: DartUser;
   assignees: DartUser[];
-  dartboards: DartBoard[];
-  statuses: DartStatus[];
-  tags: DartTag[];
+  dartboards: (DartBoard | string)[];
+  statuses: (DartStatus | string)[];
+  tags: (DartTag | string)[];
   priorities: DartPriority[];
   sizes: DartSize[];
   folders: DartFolder[];
@@ -155,18 +155,18 @@ export interface DartConfig {
 // ============================================================================
 
 /** Extract names from dartboards array for fuzzy matching */
-export function getDartboardNames(dartboards: DartBoard[]): string[] {
-  return dartboards.map(d => d.name);
+export function getDartboardNames(dartboards: (DartBoard | string)[]): string[] {
+  return dartboards.map(d => typeof d === 'string' ? d : d.name);
 }
 
 /** Extract names from statuses array for fuzzy matching */
-export function getStatusNames(statuses: DartStatus[]): string[] {
-  return statuses.map(s => s.name);
+export function getStatusNames(statuses: (DartStatus | string)[]): string[] {
+  return statuses.map(s => typeof s === 'string' ? s : s.name);
 }
 
 /** Extract names from tags array for fuzzy matching */
-export function getTagNames(tags: DartTag[]): string[] {
-  return tags.map(t => t.name);
+export function getTagNames(tags: (DartTag | string)[]): string[] {
+  return tags.map(t => typeof t === 'string' ? t : t.name);
 }
 
 /** Extract names from folders array for fuzzy matching */
@@ -185,27 +185,68 @@ export function getSizeLabels(sizes: DartSize[]): string[] {
 }
 
 /** Find dartboard by name or dart_id (case-insensitive) */
-export function findDartboard(dartboards: DartBoard[], input: string): DartBoard | undefined {
+export function findDartboard(dartboards: (DartBoard | string)[], input: string): DartBoard | string | undefined {
   const normalized = input.toLowerCase().trim();
-  return dartboards.find(
-    d => d.name?.toLowerCase() === normalized || d.dart_id?.toLowerCase() === normalized
-  );
+  return dartboards.find(d => {
+    if (typeof d === 'string') {
+      return d.toLowerCase() === normalized;
+    }
+    return d.name?.toLowerCase() === normalized || d.dart_id?.toLowerCase() === normalized;
+  });
+}
+
+/** Get dart_id from a dartboard (handles both string and object formats) */
+export function getDartboardId(dartboard: DartBoard | string): string {
+  if (typeof dartboard === 'string') {
+    return dartboard; // When API returns strings, the string IS the identifier
+  }
+  return dartboard.dart_id;
+}
+
+/** Get name from a dartboard (handles both string and object formats) */
+export function getDartboardName(dartboard: DartBoard | string): string {
+  if (typeof dartboard === 'string') {
+    return dartboard;
+  }
+  return dartboard.name;
 }
 
 /** Find status by name or dart_id (case-insensitive) */
-export function findStatus(statuses: DartStatus[], input: string): DartStatus | undefined {
+export function findStatus(statuses: (DartStatus | string)[], input: string): DartStatus | string | undefined {
   const normalized = input.toLowerCase().trim();
-  return statuses.find(
-    s => s.name?.toLowerCase() === normalized || s.dart_id?.toLowerCase() === normalized
-  );
+  return statuses.find(s => {
+    if (typeof s === 'string') {
+      return s.toLowerCase() === normalized;
+    }
+    return s.name?.toLowerCase() === normalized || s.dart_id?.toLowerCase() === normalized;
+  });
+}
+
+/** Get dart_id from a status (handles both string and object formats) */
+export function getStatusId(status: DartStatus | string): string {
+  if (typeof status === 'string') {
+    return status;
+  }
+  return status.dart_id;
 }
 
 /** Find tag by name or dart_id (case-insensitive) */
-export function findTag(tags: DartTag[], input: string): DartTag | undefined {
+export function findTag(tags: (DartTag | string)[], input: string): DartTag | string | undefined {
   const normalized = input.toLowerCase().trim();
-  return tags.find(
-    t => t.name?.toLowerCase() === normalized || t.dart_id?.toLowerCase() === normalized
-  );
+  return tags.find(t => {
+    if (typeof t === 'string') {
+      return t.toLowerCase() === normalized;
+    }
+    return t.name?.toLowerCase() === normalized || t.dart_id?.toLowerCase() === normalized;
+  });
+}
+
+/** Get dart_id from a tag (handles both string and object formats) */
+export function getTagId(tag: DartTag | string): string {
+  if (typeof tag === 'string') {
+    return tag;
+  }
+  return tag.dart_id;
 }
 
 /** Find folder by name or dart_id (case-insensitive) */

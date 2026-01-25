@@ -217,7 +217,7 @@ async function resolveDartboard(dartboard: string, client: DartClient): Promise<
     );
   }
 
-  return matchedDartboard.dart_id;
+  return typeof matchedDartboard === 'string' ? matchedDartboard : matchedDartboard.dart_id;
 }
 
 /**

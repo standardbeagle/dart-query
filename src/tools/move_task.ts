@@ -64,7 +64,7 @@ export async function handleMoveTask(input: MoveTaskInput): Promise<MoveTaskOutp
         dartboardNames
       );
     }
-    resolvedDartboard = dartboard.dart_id;
+    resolvedDartboard = typeof dartboard === 'string' ? dartboard : dartboard.dart_id;
   }
 
   const client = new DartClient({ token: DART_TOKEN });

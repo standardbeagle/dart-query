@@ -336,7 +336,7 @@ async function validateUpdates(
       );
     }
 
-    validated.dartboard = dartboard.dart_id;
+    validated.dartboard = typeof dartboard === 'string' ? dartboard : dartboard.dart_id;
   }
 
   // Validate status
@@ -360,7 +360,7 @@ async function validateUpdates(
       );
     }
 
-    validated.status = status.dart_id;
+    validated.status = typeof status === 'string' ? status : status.dart_id;
   }
 
   // Validate priority
@@ -495,7 +495,7 @@ async function validateUpdates(
           );
         }
 
-        resolvedTags.push(tag.dart_id);
+        resolvedTags.push(typeof tag === 'string' ? tag : tag.dart_id);
       }
 
       validated.tags = resolvedTags;
