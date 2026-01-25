@@ -13,13 +13,6 @@ import {
   ValidationError,
 } from '../types/index.js';
 
-const DART_TOKEN = process.env.DART_TOKEN;
-if (!DART_TOKEN) {
-  throw new Error('DART_TOKEN environment variable is required');
-}
-
-const dartClient = new DartClient({ token: DART_TOKEN });
-
 /**
  * Add a comment to a task
  *
@@ -37,6 +30,15 @@ const dartClient = new DartClient({ token: DART_TOKEN });
 export async function handleAddTaskComment(
   input: unknown
 ): Promise<AddTaskCommentOutput> {
+  const DART_TOKEN = process.env.DART_TOKEN;
+
+  if (!DART_TOKEN) {
+    throw new DartAPIError(
+      'DART_TOKEN environment variable is required. Get your token from: https://app.dartai.com/?settings=account',
+      401
+    );
+  }
+
   // Defensive input validation
   if (!input || typeof input !== 'object') {
     throw new ValidationError('Input must be a non-null object');
@@ -75,6 +77,8 @@ export async function handleAddTaskComment(
       'text'
     );
   }
+
+  const dartClient = new DartClient({ token: DART_TOKEN });
 
   try {
     // Call DartClient.addComment() - use original text to preserve formatting

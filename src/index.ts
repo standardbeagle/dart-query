@@ -1,5 +1,45 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get package.json path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJsonPath = join(__dirname, '..', 'package.json');
+
+// Handle --version and --help flags before any other imports
+const args = process.argv.slice(2);
+if (args.includes('--version') || args.includes('-v')) {
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  console.log(packageJson.version);
+  process.exit(0);
+}
+
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(`
+dart-query - MCP server for Dart AI task management
+
+Usage:
+  dart-query [options]
+
+Options:
+  --version, -v    Show version number
+  --help, -h       Show this help message
+
+Environment Variables:
+  DART_TOKEN       Your Dart AI API token (required)
+                   Get it from: https://app.dartai.com/?settings=account
+
+MCP Server:
+  This is an MCP (Model Context Protocol) server.
+  It should be configured in your MCP client (e.g., Claude Desktop).
+  See README.md for configuration instructions.
+`);
+  process.exit(0);
+}
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -33,18 +73,14 @@ import { handleAttachUrl } from './tools/attach_url.js';
 import { handleGetDartboard } from './tools/get_dartboard.js';
 import { handleGetFolder } from './tools/get_folder.js';
 
-// Validate DART_TOKEN on startup
+// Warn if DART_TOKEN is missing (but don't exit - tools will fail when called)
 const DART_TOKEN = process.env.DART_TOKEN;
 if (!DART_TOKEN) {
-  console.error('Error: DART_TOKEN environment variable is required');
-  console.error('Get your token from: https://app.dartai.com/?settings=account');
-  process.exit(1);
-}
-
-if (!DART_TOKEN.startsWith('dsa_')) {
-  console.error('Error: DART_TOKEN must start with "dsa_"');
+  console.error('Warning: DART_TOKEN environment variable is not set');
+  console.error('Tools will fail when called. Get your token from: https://app.dartai.com/?settings=account');
+} else if (!DART_TOKEN.startsWith('dsa_')) {
+  console.error('Warning: DART_TOKEN should start with "dsa_"');
   console.error('Check your token format at: https://app.dartai.com/?settings=account');
-  process.exit(1);
 }
 
 /**
