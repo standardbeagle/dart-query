@@ -88,22 +88,3 @@ jobs:
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          generate_release_notes: true
-          body: |
-            ## Installation
-            ```bash
-            npm install -g @standardbeagle/dart-query
-            ```
-
-            ## What's Changed
-            See full changelog in commits below.
-
-            ## Documentation
-            - [README](https://github.com/standardbeagle/dart-query#readme)
-            - [Tool Documentation](https://github.com/standardbeagle/dart-query/blob/main/TOOLS.md)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
