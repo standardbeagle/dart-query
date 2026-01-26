@@ -550,11 +550,9 @@ add_task_comment({
 
   // Relationship filters
   has_parent?: boolean             // filter tasks that have/don't have a parent
-  has_subtasks?: boolean           // filter tasks that have/don't have subtasks
-  has_blockers?: boolean           // filter tasks that are/aren't blocked
-  is_blocking?: boolean            // filter tasks that are/aren't blocking others
-  blocked_by?: string              // filter tasks blocked by specific dart_id
-  blocking?: string                // filter tasks blocking specific dart_id
+  // Note: Only has_parent is supported. Other relationship filters (has_subtasks,
+  // has_blockers, is_blocking) are not available because the list API doesn't
+  // return taskRelationships data.
 }
 ```
 
@@ -592,46 +590,26 @@ list_tasks({
 // Pagination (get next 100 tasks)
 list_tasks({ limit: 100, offset: 100 })
 
-// List all blocked tasks (tasks that have blockers)
+// List subtasks only (tasks with a parent)
 list_tasks({
-  has_blockers: true
+  has_parent: true
 })
 
-// List all tasks that are blocking other tasks
+// List root tasks only (tasks without a parent)
 list_tasks({
-  is_blocking: true
+  has_parent: false
 })
 
-// List parent tasks only (tasks that have subtasks)
-list_tasks({
-  has_subtasks: true
-})
-
-// List leaf tasks only (tasks without subtasks)
-list_tasks({
-  has_subtasks: false
-})
-
-// List tasks blocked by a specific task
-list_tasks({
-  blocked_by: "duid_release_blocker"
-})
-
-// List tasks that a specific task is blocking
-list_tasks({
-  blocking: "duid_deployment_task"
-})
-
-// Combine relationship filters with other filters
+// Combine parent filter with other filters
 list_tasks({
   dartboard: "Engineering/backend",
-  has_blockers: true,
+  has_parent: false,
   priority: "high"
 })
-// Returns high-priority blocked tasks in the Engineering dartboard
+// Returns high-priority root tasks in the Engineering dartboard
 ```
 
-**Performance Note:** Relationship filters require client-side filtering and may be slower on large datasets. Consider using DartQL queries with `batch_update_tasks` for complex relationship queries.
+**API Limitation:** Only `has_parent` filter is supported because the list API returns `parent_task` but does not return `taskRelationships` data (subtask_ids, blocker_ids, etc.). To see full relationship data, use `get_task()` on individual tasks.
 
 **Token Budget:** Variable based on result count (~200 tokens per 10 tasks)
 
@@ -1891,16 +1869,13 @@ await update_task({
   }
 });
 
-// Step 4: Find all blocked tasks in the release pipeline
-const blockedTasks = await list_tasks({
-  has_blockers: true,
-  dartboard: "Engineering/releases"
-});
+// Step 4: Check the release task for blockers
+// Note: list_tasks doesn't support has_blockers filter (API limitation)
+// Use get_task to see relationship data for individual tasks
+const releaseTask = await get_task({ dart_id: release.dart_id });
+const hasBlockers = releaseTask.blocker_ids?.length > 0;
 
 // Step 5: When a feature is complete, update relationships
-// First get current state to preserve other blockers
-const releaseTask = await get_task({ dart_id: release.dart_id });
-
 // Remove completed feature from blockers
 const remainingBlockers = releaseTask.blocker_ids?.filter(
   id => id !== feature1.dart_id
@@ -1913,12 +1888,9 @@ await update_task({
   }
 });
 
-// Step 6: Find all tasks ready to release (no longer blocked)
-const readyTasks = await list_tasks({
-  has_blockers: false,
-  dartboard: "Engineering/releases",
-  status: "To Do"
-});
+// Step 6: Check if release is ready (no more blockers)
+const updatedRelease = await get_task({ dart_id: release.dart_id });
+const isReady = !updatedRelease.blocker_ids || updatedRelease.blocker_ids.length === 0;
 ```
 
 ### Workflow 7: Linking Related Tasks

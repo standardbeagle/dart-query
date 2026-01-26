@@ -66,7 +66,7 @@ const TOOL_GROUPS = {
     tools: [
       {
         name: 'list_tasks',
-        description: 'List tasks with optional filtering by assignee, status, dartboard, priority, due date, relationships, and more',
+        description: 'List tasks with optional filtering by assignee, status, dartboard, priority, due date, has_parent, and more',
       },
       {
         name: 'search_tasks',
@@ -400,27 +400,30 @@ Querying Relationships:
   get_task(dart_id="duid_task1", expand_relationships=true)
     → Includes relationship_counts and expanded relationship details
 
-  list_tasks(has_subtasks=true)
-    → Filter to parent tasks only
+  list_tasks(has_parent=true)
+    → Filter to subtasks only (tasks with a parent)
 
-  list_tasks(has_blockers=true)
-    → Find blocked tasks
+  list_tasks(has_parent=false)
+    → Filter to root tasks only (tasks without a parent)
 
-  list_tasks(blocked_by="duid_task1")
-    → Find all tasks blocked by a specific task
+API Limitation:
+  The list_tasks endpoint only supports has_parent filter because the Dart
+  API returns parent_task in list responses but does NOT return relationship
+  arrays (subtask_ids, blocker_ids, etc.). To find tasks with relationships,
+  use get_task() on individual tasks or filter by parent_task in DartQL.
 
 Relationship Filters (list_tasks):
-  has_parent: boolean        - Tasks with a parent task
-  has_subtasks: boolean      - Tasks with subtasks
-  has_blockers: boolean      - Tasks blocked by other tasks
-  is_blocking: boolean       - Tasks blocking other tasks
-  blocked_by: string         - Tasks blocked by specific task
-  blocking: string           - Tasks that block specific task
+  has_parent: boolean - Tasks with/without a parent task (SUPPORTED)
 
-DartQL Relationship Queries:
-  "subtask_ids IS NOT NULL"        - Parent tasks
-  "blocker_ids CONTAINS 'duid_x'"  - Tasks blocked by duid_x
-  "related_ids IS NULL"            - Tasks with no relations
+  Note: Other relationship filters (has_subtasks, has_blockers, is_blocking)
+  are NOT available because the list API doesn't return taskRelationships.
+
+DartQL Relationship Queries (batch operations):
+  Note: DartQL queries for batch_update_tasks/batch_delete_tasks fetch full
+  task data, so relationship fields can be used in WHERE clauses:
+
+  "parent_task IS NOT NULL"        - Subtasks (tasks with parent)
+  "parent_task IS NULL"            - Root tasks (no parent)
 
 CSV Import:
   Relationship columns accept comma-separated dart_ids:
@@ -431,7 +434,7 @@ Best Practices:
   - Use expand_relationships=true sparingly (adds API calls)
   - Clear relationships with empty array [], not null
   - Validate dart_ids exist before creating relationships
-  - Use has_blockers filter to find blocked work
+  - Use get_task() to see full relationship data for a task
 
 Token Budget: ~600 tokens
 Performance: Varies by operation`,

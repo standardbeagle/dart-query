@@ -372,42 +372,15 @@ async function resolveFilters(
 
 /**
  * Validate relationship filter parameters
+ *
+ * Note: Only has_parent is supported because the list API returns parent_task.
+ * Other relationship filters (has_subtasks, has_blockers, is_blocking) are not
+ * available because the list API doesn't return taskRelationships data.
  */
 function validateRelationshipFilters(input: ListTasksInput): void {
-  // Validate boolean filters
+  // Validate has_parent boolean filter
   if (input.has_parent !== undefined && typeof input.has_parent !== 'boolean') {
     throw new ValidationError('has_parent must be a boolean', 'has_parent');
-  }
-
-  if (input.has_subtasks !== undefined && typeof input.has_subtasks !== 'boolean') {
-    throw new ValidationError('has_subtasks must be a boolean', 'has_subtasks');
-  }
-
-  if (input.has_blockers !== undefined && typeof input.has_blockers !== 'boolean') {
-    throw new ValidationError('has_blockers must be a boolean', 'has_blockers');
-  }
-
-  if (input.is_blocking !== undefined && typeof input.is_blocking !== 'boolean') {
-    throw new ValidationError('is_blocking must be a boolean', 'is_blocking');
-  }
-
-  // Validate dart_id filters (blocked_by and blocking)
-  if (input.blocked_by !== undefined) {
-    if (typeof input.blocked_by !== 'string') {
-      throw new ValidationError('blocked_by must be a string (dart_id)', 'blocked_by');
-    }
-    if (input.blocked_by.trim() === '') {
-      throw new ValidationError('blocked_by cannot be an empty string', 'blocked_by');
-    }
-  }
-
-  if (input.blocking !== undefined) {
-    if (typeof input.blocking !== 'string') {
-      throw new ValidationError('blocking must be a string (dart_id)', 'blocking');
-    }
-    if (input.blocking.trim() === '') {
-      throw new ValidationError('blocking cannot be an empty string', 'blocking');
-    }
   }
 }
 
@@ -426,24 +399,20 @@ function isValidISO8601Date(dateString: string): boolean {
 
 /**
  * Check if relationship filters are being used (require client-side filtering)
+ *
+ * Note: Only has_parent is supported. Other relationship filters were removed
+ * because the list API doesn't return taskRelationships data.
  */
 function hasRelationshipFilters(input: ListTasksInput): boolean {
-  return (
-    input.has_parent !== undefined ||
-    input.has_subtasks !== undefined ||
-    input.has_blockers !== undefined ||
-    input.is_blocking !== undefined ||
-    input.blocked_by !== undefined ||
-    input.blocking !== undefined
-  );
+  return input.has_parent !== undefined;
 }
 
 /**
  * Apply client-side filtering for relationship filters.
  *
- * Performance note: Relationship filters require client-side processing because
- * the Dart API does not support filtering by relationship arrays. For large task
- * counts, this may be slower than API-level filtering.
+ * Note: Only has_parent is supported because the list API returns parent_task.
+ * Other relationship filters (has_subtasks, has_blockers, is_blocking) were removed
+ * because the list API doesn't return taskRelationships data.
  */
 function applyClientSideFilters(tasks: DartTask[], input: ListTasksInput): DartTask[] {
   // If no relationship filters, return as-is (API handles other filters)
@@ -456,46 +425,6 @@ function applyClientSideFilters(tasks: DartTask[], input: ListTasksInput): DartT
     if (input.has_parent !== undefined) {
       const hasParent = task.parent_task !== undefined && task.parent_task !== null && task.parent_task !== '';
       if (input.has_parent !== hasParent) {
-        return false;
-      }
-    }
-
-    // has_subtasks filter: tasks with or without subtasks
-    if (input.has_subtasks !== undefined) {
-      const hasSubtasks = Array.isArray(task.subtask_ids) && task.subtask_ids.length > 0;
-      if (input.has_subtasks !== hasSubtasks) {
-        return false;
-      }
-    }
-
-    // has_blockers filter: tasks that are blocked or not blocked
-    if (input.has_blockers !== undefined) {
-      const hasBlockers = Array.isArray(task.blocker_ids) && task.blocker_ids.length > 0;
-      if (input.has_blockers !== hasBlockers) {
-        return false;
-      }
-    }
-
-    // is_blocking filter: tasks that block other tasks or not
-    if (input.is_blocking !== undefined) {
-      const isBlocking = Array.isArray(task.blocking_ids) && task.blocking_ids.length > 0;
-      if (input.is_blocking !== isBlocking) {
-        return false;
-      }
-    }
-
-    // blocked_by filter: tasks blocked by a specific task
-    if (input.blocked_by !== undefined) {
-      const blockerIds = task.blocker_ids || [];
-      if (!blockerIds.includes(input.blocked_by)) {
-        return false;
-      }
-    }
-
-    // blocking filter: tasks that are blocking a specific task
-    if (input.blocking !== undefined) {
-      const blockingIds = task.blocking_ids || [];
-      if (!blockingIds.includes(input.blocking)) {
         return false;
       }
     }
@@ -561,12 +490,8 @@ function buildFiltersApplied(
   if (resolved.due_after) filtersApplied.due_after = resolved.due_after;
 
   // Echo back relationship filters (client-side filters)
+  // Note: Only has_parent is supported (list API returns parent_task)
   if (input.has_parent !== undefined) filtersApplied.has_parent = input.has_parent;
-  if (input.has_subtasks !== undefined) filtersApplied.has_subtasks = input.has_subtasks;
-  if (input.has_blockers !== undefined) filtersApplied.has_blockers = input.has_blockers;
-  if (input.is_blocking !== undefined) filtersApplied.is_blocking = input.is_blocking;
-  if (input.blocked_by !== undefined) filtersApplied.blocked_by = input.blocked_by;
-  if (input.blocking !== undefined) filtersApplied.blocking = input.blocking;
 
   // Include pagination info (using actual validated values, not defaults from input)
   filtersApplied.limit = input.limit !== undefined ? input.limit : 50;

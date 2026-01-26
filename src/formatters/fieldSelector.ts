@@ -152,7 +152,7 @@ export function parseFormat(formatStr: string | undefined): OutputFormat {
  * Examples:
  * - "status = 'Todo'" -> simple WHERE clause
  * - "SELECT id,title WHERE status = 'Todo'" -> field selection + WHERE
- * - "SELECT id,title,+blockers WHERE has_blockers = true format=compact"
+ * - "SELECT id,title WHERE has_parent = true format=compact"
  */
 export function parseQuery(query: string): ParsedQuery {
   const result: ParsedQuery = {
@@ -284,7 +284,7 @@ export function getFieldsHelp(): string {
     'Examples:',
     '  status = \'Todo\'',
     '  SELECT id,title,due WHERE status = \'Todo\'',
-    '  SELECT id,title,#blockers WHERE has_blockers = true format=compact',
+    '  SELECT id,title WHERE has_parent = true format=compact',
   ];
 
   return lines.join('\n');

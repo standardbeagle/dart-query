@@ -238,7 +238,7 @@ class DartQueryServer {
         // Task Query
         {
           name: 'list_tasks',
-          description: 'Query tasks with filters (assignee, status, dartboard, priority, tags, dates, relationships), pagination, and detail levels. Relationship filters use client-side filtering - may be slower for large task counts.',
+          description: 'Query tasks with filters (assignee, status, dartboard, priority, tags, dates, has_parent), pagination, and detail levels. Parent filter uses client-side filtering.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -275,26 +275,6 @@ class DartQueryServer {
               has_parent: {
                 type: 'boolean',
                 description: 'Filter tasks with parent (true) or without parent (false). Client-side filter.',
-              },
-              has_subtasks: {
-                type: 'boolean',
-                description: 'Filter tasks with subtasks (true) or without subtasks (false). Client-side filter.',
-              },
-              has_blockers: {
-                type: 'boolean',
-                description: 'Filter tasks that are blocked (true) or not blocked (false). Client-side filter.',
-              },
-              is_blocking: {
-                type: 'boolean',
-                description: 'Filter tasks that block others (true) or block nothing (false). Client-side filter.',
-              },
-              blocked_by: {
-                type: 'string',
-                description: 'Filter tasks blocked by specific task (dart_id). Client-side filter.',
-              },
-              blocking: {
-                type: 'string',
-                description: 'Filter tasks that are blocking a specific task (dart_id). Client-side filter.',
               },
               // Pagination
               limit: {

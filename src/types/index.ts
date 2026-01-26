@@ -409,38 +409,10 @@ export interface ListTasksInput {
   /**
    * Filter tasks that have a parent task (true) or no parent task (false).
    * Filters based on parent_task field being set or undefined.
+   * Note: Other relationship filters (has_subtasks, has_blockers, is_blocking)
+   * are not available because the list API doesn't return taskRelationships data.
    */
   has_parent?: boolean;
-
-  /**
-   * Filter tasks that have subtasks (true) or no subtasks (false).
-   * Filters based on subtask_ids array being non-empty or empty/undefined.
-   */
-  has_subtasks?: boolean;
-
-  /**
-   * Filter tasks that are blocked (true) or not blocked (false).
-   * Filters based on blocker_ids array being non-empty or empty/undefined.
-   */
-  has_blockers?: boolean;
-
-  /**
-   * Filter tasks that are blocking other tasks (true) or not blocking any (false).
-   * Filters based on blocking_ids array being non-empty or empty/undefined.
-   */
-  is_blocking?: boolean;
-
-  /**
-   * Filter tasks blocked by a specific task (by dart_id).
-   * Returns tasks where blocker_ids contains this dart_id.
-   */
-  blocked_by?: string;
-
-  /**
-   * Filter tasks that are blocking a specific task (by dart_id).
-   * Returns tasks where blocking_ids contains this dart_id.
-   */
-  blocking?: string;
 }
 
 export interface ListTasksOutput {

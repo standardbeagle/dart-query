@@ -150,7 +150,7 @@ describe('parseQuery', () => {
   });
 
   it('should parse expansion in SELECT', () => {
-    const result = parseQuery('SELECT id,title,+blockers WHERE has_blockers = true');
+    const result = parseQuery('SELECT id,title,+blockers WHERE has_parent = true');
     expect(result.selection.fields).toContain('id');
     expect(result.selection.fields).toContain('title');
     expect(result.selection.fields).toContain('#blockers');

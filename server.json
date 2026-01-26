@@ -6,12 +6,12 @@
     "url": "https://github.com/standardbeagle/dart-query",
     "source": "github"
   },
-  "version": "0.4.0",
+  "version": "0.5.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@standardbeagle/dart-query",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "transport": {
         "type": "stdio"
       },

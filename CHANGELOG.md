@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-25
+
+### Removed
+- **Relationship filters from list_tasks** that couldn't work due to API limitations:
+  - `has_subtasks`, `has_blockers`, `is_blocking`, `blocked_by`, `blocking` filters removed
+  - List API doesn't return `taskRelationships` data (subtask_ids, blocker_ids, etc.)
+  - `has_parent` filter retained - works because list API returns `parent_task`
+- Updated info tool documentation to clarify API limitations
+
 ## [0.4.0] - 2026-01-25
 
 ### Added
