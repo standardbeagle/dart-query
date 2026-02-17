@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-02-17
+
+### Changed
+- **Flattened `update_task` tool schema** - all fields now go at top level alongside `dart_id` instead of nested inside an `updates` object. Reduces LLM mistakes significantly.
+- `DartClient.updateTask()` now takes two arguments `(dartId, updates)` instead of a single input object
+
+### Added
+- **LLM mistake detection** in `update_task` handler with corrective error messages:
+  - Detects `task_id`, `id`, `taskId` and suggests `dart_id`
+  - Detects nested `updates: {...}` wrapper and explains flat format
+  - Detects misspelled fields (`due_date`→`due_at`, `blockers`→`blocker_ids`, etc.)
+
+## [0.6.0] - 2026-02-15
+
+### Changed
+- Improved error messages surfacing actual API error details
+- Permissive tag handling for unknown tags
+
 ## [0.5.0] - 2026-01-25
 
 ### Removed
