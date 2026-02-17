@@ -1,7 +1,7 @@
 {
-  "iterations": 24,
+  "iterations": 8,
   "started_at": null,
-  "last_iteration_at": "2026-01-18T22:38:12.969637",
+  "last_iteration_at": "2026-01-25T21:43:33.860119",
   "last_subagent": "unknown",
   "last_result": {
     "status": "unknown",
@@ -10,5 +10,9 @@
     "blocker": null,
     "uncertainty": null,
     "fix_task_created": false
-  }
+  },
+  "verifications": 11,
+  "last_verification_at": "2026-02-17T09:19:04.601932",
+  "doc_updates": 9,
+  "last_doc_update_at": "2026-02-17T09:19:04.597894"
 }
