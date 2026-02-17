@@ -24,7 +24,7 @@ const batchOperations = new Map<string, BatchOperation>();
  * generateBatchOperationId('update') // => 'batch_update_1706123456789_a1b2c3'
  */
 export function generateBatchOperationId(
-  operationType: 'update' | 'delete' | 'import'
+  operationType: 'update' | 'delete' | 'import' | 'dartql'
 ): string {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
@@ -39,7 +39,7 @@ export function generateBatchOperationId(
  * @returns BatchOperation with initial state
  */
 export function createBatchOperation(
-  operationType: 'update' | 'delete' | 'import',
+  operationType: 'update' | 'delete' | 'import' | 'dartql',
   totalItems: number
 ): BatchOperation {
   const batchOperationId = generateBatchOperationId(operationType);

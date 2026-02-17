@@ -596,12 +596,80 @@ export interface DartQLParseResult {
 }
 
 // ============================================================================
+// DartQL Statement Types (UPDATE/DELETE language)
+// ============================================================================
+
+export interface DartQLProgram {
+  statements: DartQLStatement[];
+}
+
+export type DartQLStatement = DartQLUpdateStatement | DartQLDeleteStatement;
+
+export interface DartQLUpdateStatement {
+  type: 'update';
+  where: DartQLExpression;
+  assignments: DartQLAssignment[];
+  comment?: string; // raw template with {field} placeholders
+}
+
+export interface DartQLDeleteStatement {
+  type: 'delete';
+  where: DartQLExpression;
+  confirmed: boolean;
+}
+
+export interface DartQLAssignment {
+  field: string;
+  value: DartQLSetValue;
+}
+
+export type DartQLSetValue =
+  | { type: 'string'; value: string }
+  | { type: 'number'; value: number }
+  | { type: 'null' }
+  | { type: 'array'; elements: DartQLSetValue[] };
+
+export interface DartQLStatementParseResult {
+  program: DartQLProgram;
+  errors: string[];
+}
+
+export interface ExecuteDartQLInput {
+  query: string;
+  dry_run?: boolean;     // default true
+  concurrency?: number;  // 1-20, default 5
+}
+
+export interface ExecuteDartQLOutput {
+  batch_operation_id: string;
+  dry_run: boolean;
+  statements: StatementResult[];
+  total_matched: number;
+  total_succeeded: number;
+  total_failed: number;
+  execution_time_ms: number;
+}
+
+export interface StatementResult {
+  statement_index: number;
+  statement_type: 'update' | 'delete';
+  selector_matched: number;
+  succeeded: number;
+  failed: number;
+  preview_tasks?: Array<{ dart_id: string; title: string; planned_ops: string[] }>;
+  successful_dart_ids?: string[];
+  failed_items?: Array<{ dart_id: string; error: string }>;
+  comments_added?: number;
+  comments_failed?: number;
+}
+
+// ============================================================================
 // Batch Operation State
 // ============================================================================
 
 export interface BatchOperation {
   batch_operation_id: string;
-  operation_type: 'update' | 'delete' | 'import';
+  operation_type: 'update' | 'delete' | 'import' | 'dartql';
   status: 'running' | 'completed' | 'failed';
   progress: {
     completed: number;

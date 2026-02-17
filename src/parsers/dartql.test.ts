@@ -7,10 +7,13 @@ import {
   parseDartQL,
   parseDartQLToAST,
   convertToFilters,
+  parseDartQLStatements,
   DartQLTokenizer,
   DartQLLexer,
+  DartQLStatementParser,
   TokenType,
   VALID_FIELDS,
+  UPDATABLE_FIELDS,
 } from './dartql.js';
 import { DartQLParseError } from '../types/index.js';
 
@@ -2213,5 +2216,307 @@ describe('DartQL Relationship Fields', () => {
         expect(unblockedHighPriority.map(t => t.id)).toEqual(['task-1', 'task-4']);
       }
     });
+  });
+});
+
+// ============================================================================
+// Statement Tokenizer Tests
+// ============================================================================
+
+describe('DartQLTokenizer - Statement Tokens', () => {
+  it('should tokenize UPDATE keyword', () => {
+    const tokenizer = new DartQLTokenizer('UPDATE');
+    const tokens = tokenizer.tokenize();
+    expect(tokens[0]).toMatchObject({ type: TokenType.UPDATE, value: 'UPDATE' });
+  });
+
+  it('should tokenize DELETE keyword', () => {
+    const tokenizer = new DartQLTokenizer('DELETE');
+    const tokens = tokenizer.tokenize();
+    expect(tokens[0]).toMatchObject({ type: TokenType.DELETE_KW, value: 'DELETE' });
+  });
+
+  it('should tokenize SET, WHERE, COMMENT, CONFIRM keywords', () => {
+    const tokenizer = new DartQLTokenizer('SET WHERE COMMENT CONFIRM');
+    const tokens = tokenizer.tokenize();
+    expect(tokens[0]).toMatchObject({ type: TokenType.SET });
+    expect(tokens[1]).toMatchObject({ type: TokenType.WHERE });
+    expect(tokens[2]).toMatchObject({ type: TokenType.COMMENT_KW });
+    expect(tokens[3]).toMatchObject({ type: TokenType.CONFIRM });
+  });
+
+  it('should tokenize brackets and semicolons', () => {
+    const tokenizer = new DartQLTokenizer("[]; ]");
+    const tokens = tokenizer.tokenize();
+    expect(tokens[0]).toMatchObject({ type: TokenType.LBRACKET, value: '[' });
+    expect(tokens[1]).toMatchObject({ type: TokenType.RBRACKET, value: ']' });
+    expect(tokens[2]).toMatchObject({ type: TokenType.SEMICOLON, value: ';' });
+    expect(tokens[3]).toMatchObject({ type: TokenType.RBRACKET, value: ']' });
+  });
+
+  it('should tokenize array literal', () => {
+    const tokenizer = new DartQLTokenizer("['a', 'b', 'c']");
+    const tokens = tokenizer.tokenize();
+    expect(tokens[0].type).toBe(TokenType.LBRACKET);
+    expect(tokens[1]).toMatchObject({ type: TokenType.STRING, value: 'a' });
+    expect(tokens[2].type).toBe(TokenType.COMMA);
+    expect(tokens[3]).toMatchObject({ type: TokenType.STRING, value: 'b' });
+    expect(tokens[6]).toMatchObject({ type: TokenType.RBRACKET });
+  });
+
+  it('should tokenize full UPDATE statement', () => {
+    const tokenizer = new DartQLTokenizer("UPDATE WHERE status = 'Todo' SET status = 'Done'");
+    const tokens = tokenizer.tokenize();
+    expect(tokens[0].type).toBe(TokenType.UPDATE);
+    expect(tokens[1].type).toBe(TokenType.WHERE);
+    expect(tokens[5].type).toBe(TokenType.SET);
+  });
+});
+
+// ============================================================================
+// Statement Parser Tests
+// ============================================================================
+
+describe('parseDartQLStatements', () => {
+  describe('UPDATE statements', () => {
+    it('should parse basic UPDATE', () => {
+      const result = parseDartQLStatements("UPDATE WHERE status = 'Todo' SET status = 'Done'");
+      expect(result.errors).toHaveLength(0);
+      expect(result.program.statements).toHaveLength(1);
+
+      const stmt = result.program.statements[0];
+      expect(stmt.type).toBe('update');
+      if (stmt.type === 'update') {
+        expect(stmt.where.type).toBe('comparison');
+        expect(stmt.where.field).toBe('status');
+        expect(stmt.assignments).toHaveLength(1);
+        expect(stmt.assignments[0].field).toBe('status');
+        expect(stmt.assignments[0].value).toEqual({ type: 'string', value: 'Done' });
+        expect(stmt.comment).toBeUndefined();
+      }
+    });
+
+    it('should parse UPDATE with multiple assignments', () => {
+      const result = parseDartQLStatements("UPDATE WHERE dart_id = 'abc' SET status = 'Done', priority = 5");
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'update') {
+        expect(stmt.assignments).toHaveLength(2);
+        expect(stmt.assignments[0]).toEqual({ field: 'status', value: { type: 'string', value: 'Done' } });
+        expect(stmt.assignments[1]).toEqual({ field: 'priority', value: { type: 'number', value: 5 } });
+      }
+    });
+
+    it('should parse UPDATE with COMMENT', () => {
+      const result = parseDartQLStatements(
+        "UPDATE WHERE status = 'Todo' SET status = 'Done' COMMENT 'Closed: {title}'"
+      );
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'update') {
+        expect(stmt.comment).toBe('Closed: {title}');
+      }
+    });
+
+    it('should parse UPDATE with array literal in SET', () => {
+      const result = parseDartQLStatements(
+        "UPDATE WHERE dart_id = 'abc' SET blocker_ids = ['id1', 'id2']"
+      );
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'update') {
+        expect(stmt.assignments[0].field).toBe('blocker_ids');
+        expect(stmt.assignments[0].value).toEqual({
+          type: 'array',
+          elements: [
+            { type: 'string', value: 'id1' },
+            { type: 'string', value: 'id2' },
+          ],
+        });
+      }
+    });
+
+    it('should parse UPDATE with empty array (clear relationships)', () => {
+      const result = parseDartQLStatements(
+        "UPDATE WHERE dart_id = 'abc' SET blocker_ids = []"
+      );
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'update') {
+        expect(stmt.assignments[0].value).toEqual({ type: 'array', elements: [] });
+      }
+    });
+
+    it('should parse UPDATE with NULL value', () => {
+      const result = parseDartQLStatements(
+        "UPDATE WHERE dart_id = 'abc' SET parent_task = NULL"
+      );
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'update') {
+        expect(stmt.assignments[0].value).toEqual({ type: 'null' });
+      }
+    });
+
+    it('should preserve template strings in COMMENT', () => {
+      const result = parseDartQLStatements(
+        "UPDATE WHERE status = 'Todo' SET status = 'Done' COMMENT 'Task {title} by {assignees}'"
+      );
+      expect(result.errors).toHaveLength(0);
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'update') {
+        expect(stmt.comment).toBe('Task {title} by {assignees}');
+      }
+    });
+  });
+
+  describe('DELETE statements', () => {
+    it('should parse DELETE with CONFIRM', () => {
+      const result = parseDartQLStatements("DELETE WHERE status = 'Archived' CONFIRM");
+      expect(result.errors).toHaveLength(0);
+      expect(result.program.statements).toHaveLength(1);
+
+      const stmt = result.program.statements[0];
+      expect(stmt.type).toBe('delete');
+      if (stmt.type === 'delete') {
+        expect(stmt.confirmed).toBe(true);
+        expect(stmt.where.type).toBe('comparison');
+      }
+    });
+
+    it('should parse DELETE without CONFIRM', () => {
+      const result = parseDartQLStatements("DELETE WHERE status = 'Archived'");
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'delete') {
+        expect(stmt.confirmed).toBe(false);
+      }
+    });
+  });
+
+  describe('Multi-statement', () => {
+    it('should parse multiple statements separated by semicolons', () => {
+      const result = parseDartQLStatements(
+        "UPDATE WHERE status = 'Todo' SET status = 'Done'; DELETE WHERE status = 'Archived' CONFIRM"
+      );
+      expect(result.errors).toHaveLength(0);
+      expect(result.program.statements).toHaveLength(2);
+      expect(result.program.statements[0].type).toBe('update');
+      expect(result.program.statements[1].type).toBe('delete');
+    });
+
+    it('should handle trailing semicolons', () => {
+      const result = parseDartQLStatements("UPDATE WHERE dart_id = 'x' SET status = 'Done';");
+      expect(result.errors).toHaveLength(0);
+      expect(result.program.statements).toHaveLength(1);
+    });
+
+    it('should handle multiple trailing semicolons', () => {
+      const result = parseDartQLStatements("UPDATE WHERE dart_id = 'x' SET status = 'Done';;;");
+      expect(result.errors).toHaveLength(0);
+      expect(result.program.statements).toHaveLength(1);
+    });
+  });
+
+  describe('Error handling', () => {
+    it('should error on empty query', () => {
+      const result = parseDartQLStatements('');
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('Empty query');
+    });
+
+    it('should error on missing WHERE', () => {
+      const result = parseDartQLStatements("UPDATE SET status = 'Done'");
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('WHERE');
+    });
+
+    it('should error on missing SET', () => {
+      const result = parseDartQLStatements("UPDATE WHERE status = 'Todo'");
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('SET');
+    });
+
+    it('should error on unknown SET field', () => {
+      const result = parseDartQLStatements("UPDATE WHERE dart_id = 'x' SET bogus_field = 'val'");
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('Unknown SET field');
+    });
+
+    it('should suggest close matches for misspelled SET fields', () => {
+      const result = parseDartQLStatements("UPDATE WHERE dart_id = 'x' SET statu = 'Done'");
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('status');
+    });
+
+    it('should error on unexpected token instead of UPDATE/DELETE', () => {
+      const result = parseDartQLStatements("SELECT WHERE status = 'Todo'");
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('Expected UPDATE or DELETE');
+    });
+
+    it('should error on empty WHERE clause', () => {
+      const result = parseDartQLStatements("UPDATE WHERE SET status = 'Done'");
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('Empty WHERE clause');
+    });
+  });
+
+  describe('Complex WHERE expressions', () => {
+    it('should parse UPDATE with AND expression in WHERE', () => {
+      const result = parseDartQLStatements(
+        "UPDATE WHERE status = 'Todo' AND priority >= 3 SET status = 'In Progress'"
+      );
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'update') {
+        expect(stmt.where.type).toBe('logical');
+        expect(stmt.where.operator).toBe('AND');
+      }
+    });
+
+    it('should parse DELETE with complex WHERE', () => {
+      const result = parseDartQLStatements(
+        "DELETE WHERE status = 'Archived' AND completed_at < '2025-01-01' CONFIRM"
+      );
+      expect(result.errors).toHaveLength(0);
+
+      const stmt = result.program.statements[0];
+      if (stmt.type === 'delete') {
+        expect(stmt.where.type).toBe('logical');
+        expect(stmt.confirmed).toBe(true);
+      }
+    });
+  });
+});
+
+// ============================================================================
+// UPDATABLE_FIELDS Tests
+// ============================================================================
+
+describe('UPDATABLE_FIELDS', () => {
+  it('should contain all expected updatable fields', () => {
+    const expected = [
+      'title', 'description', 'status', 'priority', 'size',
+      'assignees', 'tags', 'dartboard', 'due_at', 'start_at', 'parent_task',
+      'subtask_ids', 'blocker_ids', 'blocking_ids', 'duplicate_ids', 'related_ids',
+    ];
+    for (const f of expected) {
+      expect(UPDATABLE_FIELDS.has(f)).toBe(true);
+    }
+  });
+
+  it('should NOT contain read-only fields', () => {
+    expect(UPDATABLE_FIELDS.has('dart_id')).toBe(false);
+    expect(UPDATABLE_FIELDS.has('created_at')).toBe(false);
+    expect(UPDATABLE_FIELDS.has('updated_at')).toBe(false);
+    expect(UPDATABLE_FIELDS.has('completed_at')).toBe(false);
   });
 });

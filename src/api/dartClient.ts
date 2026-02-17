@@ -268,12 +268,16 @@ export class DartClient {
     if (input.start_at) apiInput.startAt = input.start_at;
     if (input.parent_task) apiInput.parentId = input.parent_task;
 
-    // Relationship fields: snake_case → camelCase
-    if (input.subtask_ids !== undefined) apiInput.subtaskIds = input.subtask_ids;
-    if (input.blocker_ids !== undefined) apiInput.blockerIds = input.blocker_ids;
-    if (input.blocking_ids !== undefined) apiInput.blockingIds = input.blocking_ids;
-    if (input.duplicate_ids !== undefined) apiInput.duplicateIds = input.duplicate_ids;
-    if (input.related_ids !== undefined) apiInput.relatedIds = input.related_ids;
+    // Relationship fields: nest inside taskRelationships object as required by API
+    const taskRelationships: Record<string, unknown> = {};
+    if (input.subtask_ids !== undefined) taskRelationships.subtaskIds = input.subtask_ids;
+    if (input.blocker_ids !== undefined) taskRelationships.blockerIds = input.blocker_ids;
+    if (input.blocking_ids !== undefined) taskRelationships.blockingIds = input.blocking_ids;
+    if (input.duplicate_ids !== undefined) taskRelationships.duplicateIds = input.duplicate_ids;
+    if (input.related_ids !== undefined) taskRelationships.relatedIds = input.related_ids;
+    if (Object.keys(taskRelationships).length > 0) {
+      apiInput.taskRelationships = taskRelationships;
+    }
 
     // Wrap in item object as required by API
     const response = await this.request<{ item: any }>('POST', '/tasks', { item: apiInput });
@@ -384,12 +388,16 @@ export class DartClient {
     if (updates.start_at !== undefined) apiUpdates.startAt = updates.start_at;
     if (updates.parent_task !== undefined) apiUpdates.parentId = updates.parent_task;
 
-    // Relationship fields: snake_case → camelCase
-    if (updates.subtask_ids !== undefined) apiUpdates.subtaskIds = updates.subtask_ids;
-    if (updates.blocker_ids !== undefined) apiUpdates.blockerIds = updates.blocker_ids;
-    if (updates.blocking_ids !== undefined) apiUpdates.blockingIds = updates.blocking_ids;
-    if (updates.duplicate_ids !== undefined) apiUpdates.duplicateIds = updates.duplicate_ids;
-    if (updates.related_ids !== undefined) apiUpdates.relatedIds = updates.related_ids;
+    // Relationship fields: nest inside taskRelationships object as required by API
+    const taskRelationships: Record<string, unknown> = {};
+    if (updates.subtask_ids !== undefined) taskRelationships.subtaskIds = updates.subtask_ids;
+    if (updates.blocker_ids !== undefined) taskRelationships.blockerIds = updates.blocker_ids;
+    if (updates.blocking_ids !== undefined) taskRelationships.blockingIds = updates.blocking_ids;
+    if (updates.duplicate_ids !== undefined) taskRelationships.duplicateIds = updates.duplicate_ids;
+    if (updates.related_ids !== undefined) taskRelationships.relatedIds = updates.related_ids;
+    if (Object.keys(taskRelationships).length > 0) {
+      apiUpdates.taskRelationships = taskRelationships;
+    }
 
     // Wrap updates in item object as required by API
     const response = await this.request<{ item: any }>('PUT', `/tasks/${encodeURIComponent(dartId.trim())}`, { item: apiUpdates });

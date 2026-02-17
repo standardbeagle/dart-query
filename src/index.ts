@@ -57,6 +57,7 @@ import { handleUpdateTask } from './tools/update_task.js';
 import { handleDeleteTask } from './tools/delete_task.js';
 import { handleBatchUpdateTasks } from './tools/batch_update_tasks.js';
 import { handleBatchDeleteTasks } from './tools/batch_delete_tasks.js';
+import { handleExecuteDartQL } from './tools/execute_dartql.js';
 import { handleGetBatchStatus } from './tools/get_batch_status.js';
 import { handleImportTasksCSV } from './tools/import_tasks_csv.js';
 import { handleListDocs } from './tools/list_docs.js';
@@ -464,7 +465,7 @@ class DartQueryServer {
         // Batch Operations
         {
           name: 'batch_update_tasks',
-          description: 'Batch update multiple tasks matching a DartQL selector. Supports all task fields including relationships. CRITICAL: Always use dry_run=true first to preview changes!',
+          description: '[Deprecated: use execute_dartql] Batch update multiple tasks matching a DartQL selector. Supports all task fields including relationships. CRITICAL: Always use dry_run=true first to preview changes!',
           inputSchema: {
             type: 'object',
             properties: {
@@ -528,7 +529,7 @@ class DartQueryServer {
         },
         {
           name: 'batch_delete_tasks',
-          description: 'Batch delete multiple tasks matching a DartQL selector. MOST DANGEROUS OPERATION! CRITICAL: dry_run defaults to true, confirm=true REQUIRED when dry_run=false. Tasks move to trash (recoverable).',
+          description: '[Deprecated: use execute_dartql] Batch delete multiple tasks matching a DartQL selector. MOST DANGEROUS OPERATION! CRITICAL: dry_run defaults to true, confirm=true REQUIRED when dry_run=false. Tasks move to trash (recoverable).',
           inputSchema: {
             type: 'object',
             properties: {
@@ -553,8 +554,30 @@ class DartQueryServer {
           },
         },
         {
+          name: 'execute_dartql',
+          description: 'Execute DartQL UPDATE/DELETE statements. Supports template vars {field}, array literals, comments, and multi-statement (;). Dry-run by default.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: "DartQL statement(s). Examples: UPDATE WHERE status = 'Todo' SET status = 'Done'; DELETE WHERE status = 'Archived' CONFIRM",
+              },
+              dry_run: {
+                type: 'boolean',
+                description: 'Preview mode (default: true). Set to false to execute.',
+              },
+              concurrency: {
+                type: 'integer',
+                description: 'Parallel operations per statement (default: 5, range: 1-20)',
+              },
+            },
+            required: ['query'],
+          },
+        },
+        {
           name: 'get_batch_status',
-          description: 'Retrieve status of a batch operation (update, delete, or import) by batch_operation_id. Operations are kept in memory for 1 hour.',
+          description: 'Retrieve status of a batch operation (update, delete, import, or dartql) by batch_operation_id. Operations are kept in memory for 1 hour.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -1010,6 +1033,18 @@ class DartQueryServer {
 
           case 'batch_delete_tasks': {
             const result = await handleBatchDeleteTasks((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'execute_dartql': {
+            const result = await handleExecuteDartQL((args || {}) as any);
             return {
               content: [
                 {

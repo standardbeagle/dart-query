@@ -40,10 +40,21 @@ export enum TokenType {
   NULL = 'NULL',
   BETWEEN = 'BETWEEN',
 
-  // Grouping
+  // Grouping & Delimiters
   LPAREN = 'LPAREN',               // (
   RPAREN = 'RPAREN',               // )
+  LBRACKET = 'LBRACKET',           // [
+  RBRACKET = 'RBRACKET',           // ]
   COMMA = 'COMMA',                 // ,
+  SEMICOLON = 'SEMICOLON',         // ;
+
+  // Statement keywords
+  UPDATE = 'UPDATE',
+  DELETE_KW = 'DELETE_KW',
+  SET = 'SET',
+  WHERE = 'WHERE',
+  COMMENT_KW = 'COMMENT_KW',
+  CONFIRM = 'CONFIRM',
 
   // Special
   EOF = 'EOF',
@@ -200,10 +211,26 @@ export class DartQLTokenizer {
       return { type: TokenType.RPAREN, value: ')', position: start, length: 1 };
     }
 
+    // Brackets
+    if (char === '[') {
+      this.consume();
+      return { type: TokenType.LBRACKET, value: '[', position: start, length: 1 };
+    }
+    if (char === ']') {
+      this.consume();
+      return { type: TokenType.RBRACKET, value: ']', position: start, length: 1 };
+    }
+
     // Comma
     if (char === ',') {
       this.consume();
       return { type: TokenType.COMMA, value: ',', position: start, length: 1 };
+    }
+
+    // Semicolon
+    if (char === ';') {
+      this.consume();
+      return { type: TokenType.SEMICOLON, value: ';', position: start, length: 1 };
     }
 
     // Identifiers and keywords
@@ -361,6 +388,12 @@ export class DartQLTokenizer {
       'IS': TokenType.IS,
       'NULL': TokenType.NULL,
       'BETWEEN': TokenType.BETWEEN,
+      'UPDATE': TokenType.UPDATE,
+      'DELETE': TokenType.DELETE_KW,
+      'SET': TokenType.SET,
+      'WHERE': TokenType.WHERE,
+      'COMMENT': TokenType.COMMENT_KW,
+      'CONFIRM': TokenType.CONFIRM,
     };
 
     const type = keywordMap[upperValue] || TokenType.IDENTIFIER;
@@ -1385,6 +1418,400 @@ export function parseDartQL(input: string): ParseResult {
       return {
         tokens: [],
         fields: [],
+        errors: [error.message],
+      };
+    }
+    throw error;
+  }
+}
+
+// ============================================================================
+// DartQL Statement Parser (UPDATE/DELETE language)
+// ============================================================================
+
+import type {
+  DartQLStatement,
+  DartQLUpdateStatement,
+  DartQLDeleteStatement,
+  DartQLAssignment,
+  DartQLSetValue,
+  DartQLStatementParseResult,
+} from '../types/index.js';
+
+/** Fields that can appear in SET assignments (excludes read-only fields) */
+export const UPDATABLE_FIELDS = new Set([
+  'title', 'description', 'status', 'priority', 'size',
+  'assignees', 'tags', 'dartboard', 'due_at', 'start_at', 'parent_task',
+  'subtask_ids', 'blocker_ids', 'blocking_ids', 'duplicate_ids', 'related_ids',
+]);
+
+/**
+ * DartQL Statement Parser
+ *
+ * Parses multi-statement DartQL programs:
+ *   UPDATE WHERE <expr> SET <assignments> [COMMENT <string>];
+ *   DELETE WHERE <expr> [CONFIRM];
+ *
+ * Reuses existing DartQLParser for WHERE expression parsing.
+ */
+export class DartQLStatementParser {
+  private tokens: Token[];
+  private pos: number;
+  private errors: string[];
+
+  constructor(tokens: Token[]) {
+    this.tokens = tokens;
+    this.pos = 0;
+    this.errors = [];
+  }
+
+  parse(): DartQLStatementParseResult {
+    const statements: DartQLStatement[] = [];
+
+    while (!this.isAtEnd()) {
+      // Skip trailing semicolons
+      if (this.currentType() === TokenType.SEMICOLON) {
+        this.advance();
+        continue;
+      }
+      if (this.currentType() === TokenType.EOF) break;
+
+      try {
+        statements.push(this.parseStatement());
+      } catch (e) {
+        if (e instanceof DartQLParseError) {
+          this.errors.push(e.message);
+        } else {
+          this.errors.push(`Parse error: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        // Skip to next semicolon or EOF to continue parsing
+        this.skipToRecovery();
+      }
+
+      // Consume optional semicolon between statements
+      if (this.currentType() === TokenType.SEMICOLON) {
+        this.advance();
+      }
+    }
+
+    if (statements.length === 0 && this.errors.length === 0) {
+      this.errors.push('Empty query - no statements to execute');
+    }
+
+    return {
+      program: { statements },
+      errors: this.errors,
+    };
+  }
+
+  private parseStatement(): DartQLStatement {
+    const tokenType = this.currentType();
+
+    if (tokenType === TokenType.UPDATE) {
+      return this.parseUpdateStatement();
+    }
+    if (tokenType === TokenType.DELETE_KW) {
+      return this.parseDeleteStatement();
+    }
+
+    throw new DartQLParseError(
+      `Expected UPDATE or DELETE, got '${this.currentValue()}' at position ${this.currentPos()}`,
+      this.currentPos(),
+      this.currentValue()
+    );
+  }
+
+  private parseUpdateStatement(): DartQLUpdateStatement {
+    this.expect(TokenType.UPDATE, 'Expected UPDATE');
+    this.expect(TokenType.WHERE, 'Expected WHERE after UPDATE');
+
+    // Extract WHERE tokens: everything until SET, COMMENT_KW, SEMICOLON, or EOF
+    const whereExpr = this.parseWhereExpression([TokenType.SET]);
+
+    this.expect(TokenType.SET, 'Expected SET after WHERE clause');
+
+    const assignments = this.parseSetList();
+
+    let comment: string | undefined;
+    if (this.currentType() === TokenType.COMMENT_KW) {
+      this.advance(); // consume COMMENT
+      if (this.currentType() !== TokenType.STRING) {
+        throw new DartQLParseError(
+          `Expected string after COMMENT at position ${this.currentPos()}`,
+          this.currentPos(),
+          this.currentValue()
+        );
+      }
+      comment = this.currentValue();
+      this.advance();
+    }
+
+    return {
+      type: 'update',
+      where: whereExpr,
+      assignments,
+      comment,
+    };
+  }
+
+  private parseDeleteStatement(): DartQLDeleteStatement {
+    this.expect(TokenType.DELETE_KW, 'Expected DELETE');
+    this.expect(TokenType.WHERE, 'Expected WHERE after DELETE');
+
+    // Extract WHERE tokens: everything until CONFIRM, SEMICOLON, or EOF
+    const whereExpr = this.parseWhereExpression([TokenType.CONFIRM]);
+
+    let confirmed = false;
+    if (this.currentType() === TokenType.CONFIRM) {
+      this.advance();
+      confirmed = true;
+    }
+
+    return {
+      type: 'delete',
+      where: whereExpr,
+      confirmed,
+    };
+  }
+
+  /**
+   * Extract WHERE tokens and parse the expression using DartQLParser.
+   * Stops at any of the given stop tokens, SEMICOLON, or EOF.
+   */
+  private parseWhereExpression(stopTokens: TokenType[]): DartQLExpression {
+    const stopSet = new Set([...stopTokens, TokenType.SEMICOLON, TokenType.EOF]);
+    const subTokens: Token[] = [];
+
+    while (!this.isAtEnd() && !stopSet.has(this.currentType())) {
+      subTokens.push(this.tokens[this.pos]);
+      this.advance();
+    }
+
+    if (subTokens.length === 0) {
+      throw new DartQLParseError(
+        `Empty WHERE clause at position ${this.currentPos()}`,
+        this.currentPos()
+      );
+    }
+
+    // Append synthetic EOF for the sub-parser
+    subTokens.push({
+      type: TokenType.EOF,
+      value: '',
+      position: subTokens[subTokens.length - 1].position + subTokens[subTokens.length - 1].length,
+      length: 0,
+    });
+
+    const parser = new DartQLParser(subTokens);
+    const result = parser.parse();
+
+    if (result.errors.length > 0) {
+      for (const err of result.errors) {
+        this.errors.push(`WHERE clause: ${err}`);
+      }
+    }
+
+    return result.ast;
+  }
+
+  private parseSetList(): DartQLAssignment[] {
+    const assignments: DartQLAssignment[] = [];
+    assignments.push(this.parseAssignment());
+
+    while (this.currentType() === TokenType.COMMA) {
+      this.advance(); // consume comma
+      assignments.push(this.parseAssignment());
+    }
+
+    return assignments;
+  }
+
+  private parseAssignment(): DartQLAssignment {
+    if (this.currentType() !== TokenType.IDENTIFIER) {
+      throw new DartQLParseError(
+        `Expected field name in SET clause, got '${this.currentValue()}' at position ${this.currentPos()}`,
+        this.currentPos(),
+        this.currentValue()
+      );
+    }
+
+    const field = this.currentValue().toLowerCase();
+    const fieldPos = this.currentPos();
+    this.advance();
+
+    // Validate field name
+    if (!UPDATABLE_FIELDS.has(field)) {
+      const suggestion = findClosestUpdatableField(field);
+      const hint = suggestion ? ` Did you mean '${suggestion}'?` : ` Valid fields: ${[...UPDATABLE_FIELDS].join(', ')}`;
+      throw new DartQLParseError(
+        `Unknown SET field: '${field}'.${hint} (at position ${fieldPos})`,
+        fieldPos,
+        field
+      );
+    }
+
+    if (this.currentType() !== TokenType.EQUALS) {
+      throw new DartQLParseError(
+        `Expected '=' after field name '${field}' at position ${this.currentPos()}`,
+        this.currentPos(),
+        this.currentValue()
+      );
+    }
+    this.advance(); // consume =
+
+    const value = this.parseSetValue();
+    return { field, value };
+  }
+
+  private parseSetValue(): DartQLSetValue {
+    const t = this.currentType();
+
+    if (t === TokenType.STRING) {
+      const val = this.currentValue();
+      this.advance();
+      return { type: 'string', value: val };
+    }
+
+    if (t === TokenType.NUMBER) {
+      const val = parseFloat(this.currentValue());
+      this.advance();
+      return { type: 'number', value: val };
+    }
+
+    if (t === TokenType.NULL) {
+      this.advance();
+      return { type: 'null' };
+    }
+
+    if (t === TokenType.LBRACKET) {
+      return this.parseArrayLiteral();
+    }
+
+    throw new DartQLParseError(
+      `Expected value (string, number, NULL, or array) in SET clause, got '${this.currentValue()}' at position ${this.currentPos()}`,
+      this.currentPos(),
+      this.currentValue()
+    );
+  }
+
+  private parseArrayLiteral(): DartQLSetValue {
+    this.advance(); // consume [
+
+    const elements: DartQLSetValue[] = [];
+
+    if (this.currentType() === TokenType.RBRACKET) {
+      this.advance(); // consume ]
+      return { type: 'array', elements };
+    }
+
+    elements.push(this.parseSetValue());
+
+    while (this.currentType() === TokenType.COMMA) {
+      this.advance(); // consume ,
+      elements.push(this.parseSetValue());
+    }
+
+    if (this.currentType() !== TokenType.RBRACKET) {
+      throw new DartQLParseError(
+        `Expected ']' to close array literal at position ${this.currentPos()}`,
+        this.currentPos(),
+        this.currentValue()
+      );
+    }
+    this.advance(); // consume ]
+
+    return { type: 'array', elements };
+  }
+
+  // ---- Token navigation helpers ----
+
+  private isAtEnd(): boolean {
+    return this.pos >= this.tokens.length || this.tokens[this.pos].type === TokenType.EOF;
+  }
+
+  private currentType(): TokenType {
+    return this.pos < this.tokens.length ? this.tokens[this.pos].type : TokenType.EOF;
+  }
+
+  private currentValue(): string {
+    return this.pos < this.tokens.length ? this.tokens[this.pos].value : '';
+  }
+
+  private currentPos(): number {
+    return this.pos < this.tokens.length ? this.tokens[this.pos].position : -1;
+  }
+
+  private advance(): void {
+    if (this.pos < this.tokens.length) this.pos++;
+  }
+
+  private expect(type: TokenType, errorMessage: string): void {
+    if (this.currentType() !== type) {
+      throw new DartQLParseError(
+        `${errorMessage} at position ${this.currentPos()}, got '${this.currentValue()}'`,
+        this.currentPos(),
+        this.currentValue()
+      );
+    }
+    this.advance();
+  }
+
+  private skipToRecovery(): void {
+    while (!this.isAtEnd() && this.currentType() !== TokenType.SEMICOLON) {
+      this.advance();
+    }
+  }
+}
+
+/** Levenshtein-based suggestion for SET field names */
+function findClosestUpdatableField(input: string): string | null {
+  let closest: string | null = null;
+  let minDist = Infinity;
+  for (const field of UPDATABLE_FIELDS) {
+    const dist = levenshtein(input, field);
+    if (dist < minDist && dist <= 2) {
+      minDist = dist;
+      closest = field;
+    }
+  }
+  return closest;
+}
+
+function levenshtein(a: string, b: string): number {
+  const m: number[][] = [];
+  for (let i = 0; i <= b.length; i++) m[i] = [i];
+  for (let j = 0; j <= a.length; j++) m[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      m[i][j] = b[i - 1] === a[j - 1]
+        ? m[i - 1][j - 1]
+        : Math.min(m[i - 1][j - 1] + 1, m[i][j - 1] + 1, m[i - 1][j] + 1);
+    }
+  }
+  return m[b.length][a.length];
+}
+
+/**
+ * Parse a DartQL statement program (UPDATE/DELETE with semicolons)
+ *
+ * @param input - Full DartQL statement string
+ * @returns Parse result with program AST and errors
+ *
+ * @example
+ * parseDartQLStatements("UPDATE WHERE status = 'Todo' SET status = 'Done'")
+ * parseDartQLStatements("DELETE WHERE status = 'Archived' CONFIRM")
+ */
+export function parseDartQLStatements(input: string): DartQLStatementParseResult {
+  try {
+    const tokenizer = new DartQLTokenizer(input);
+    const tokens = tokenizer.tokenize();
+
+    const parser = new DartQLStatementParser(tokens);
+    return parser.parse();
+  } catch (error) {
+    if (error instanceof DartQLParseError) {
+      return {
+        program: { statements: [] },
         errors: [error.message],
       };
     }

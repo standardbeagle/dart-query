@@ -75,16 +75,20 @@ const TOOL_GROUPS = {
     ],
   },
   'task-batch': {
-    count: 3,
+    count: 4,
     purpose: 'Bulk operations on multiple tasks',
     tools: [
       {
+        name: 'execute_dartql',
+        description: 'Execute DartQL UPDATE/DELETE statements with template vars, array literals, comments, multi-statement (;). Preferred over batch_update/delete_tasks.',
+      },
+      {
         name: 'batch_update_tasks',
-        description: 'Update multiple tasks matching a DartQL selector expression (SQL-like WHERE syntax)',
+        description: '[Deprecated: use execute_dartql] Update multiple tasks matching a DartQL selector',
       },
       {
         name: 'batch_delete_tasks',
-        description: 'Delete multiple tasks matching a DartQL selector expression (moves to trash, recoverable)',
+        description: '[Deprecated: use execute_dartql] Delete multiple tasks matching a DartQL selector',
       },
       {
         name: 'get_batch_status',
@@ -144,7 +148,7 @@ discovery   | 1     | Progressive capability discovery
 config      | 1     | Workspace configuration
 task-crud   | 5     | Single task operations
 task-query  | 2     | Search and filter tasks
-task-batch  | 3     | Bulk operations on multiple tasks
+task-batch  | 4     | Bulk operations on multiple tasks
 doc-crud    | 5     | Document management
 import      | 1     | CSV bulk import
 
@@ -253,7 +257,53 @@ Examples:
 Token Budget: ~400 tokens
 Performance: Fast (cached) / Medium (API call)`,
 
-    batch_update_tasks: `Tool: batch_update_tasks
+    execute_dartql: `Tool: execute_dartql
+Description: Execute DartQL UPDATE/DELETE statements with template vars, array literals, and multi-statement support
+
+Input Schema:
+  query: string (required)
+    One or more DartQL statements separated by semicolons
+
+  dry_run?: boolean (default: true)
+    Preview matching tasks without executing (RECOMMENDED for first run)
+
+  concurrency?: integer (default: 5)
+    Max concurrent API calls per statement (1-20)
+
+Statement Syntax:
+  UPDATE WHERE <expression> SET <field> = <value> [, ...] [COMMENT '<template>']
+  DELETE WHERE <expression> [CONFIRM]
+
+  Values: strings ('text'), numbers (42), NULL, arrays (['a', 'b'])
+  Template vars: {field} in strings resolves to pre-update task values
+
+Examples:
+  -- Set blocker relationships
+  UPDATE WHERE dart_id = 'abc' SET blocker_ids = ['id1', 'id2']
+
+  -- Batch status change with comment
+  UPDATE WHERE status = 'Todo' SET status = 'Done' COMMENT 'Closed: {title}'
+
+  -- Multi-statement
+  UPDATE WHERE priority = 1 SET priority = 2;
+  DELETE WHERE status = 'Archived' AND completed_at < '2025-01-01' CONFIRM
+
+Safety:
+  - dry_run=true (default): preview only
+  - DELETE requires CONFIRM keyword when dry_run=false
+  - WHERE is mandatory (no accidental "update all")
+
+Output Schema:
+  batch_operation_id: string
+  dry_run: boolean
+  statements: Array<StatementResult>
+  total_matched, total_succeeded, total_failed: integer
+  execution_time_ms: integer
+
+Token Budget: ~400 tokens
+Performance: Slow (depends on match count)`,
+
+    batch_update_tasks: `Tool: batch_update_tasks [DEPRECATED: use execute_dartql instead]
 Description: Update multiple tasks matching a DartQL selector expression (SQL-like WHERE syntax)
 
 Input Schema:
