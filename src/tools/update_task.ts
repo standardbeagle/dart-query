@@ -27,7 +27,6 @@ import {
   findTag,
   getDartboardNames,
   getStatusNames,
-  getTagNames,
 } from '../types/index.js';
 
 /**
@@ -260,7 +259,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   }
 
   // ============================================================================
-  // Step 9: Validate and resolve tags
+  // Step 9: Resolve tags (pass through as-is, Dart API creates new tags)
   // ============================================================================
   if (input.updates.tags !== undefined) {
     if (!Array.isArray(input.updates.tags)) {
@@ -271,48 +270,20 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     }
 
     if (input.updates.tags.length > 0) {
-      if (!config.tags || config.tags.length === 0) {
-        throw new ValidationError(
-          'No tags found in workspace configuration. Cannot update tags.',
-          'tags'
-        );
-      }
-
-      const invalidTags: string[] = [];
       const resolvedTags: string[] = [];
-
       for (const tagInput of input.updates.tags) {
-        // Validate that each element is a string
         if (typeof tagInput !== 'string') {
           throw new ValidationError(
             `tags array must contain only strings, found: ${typeof tagInput}`,
             'tags'
           );
         }
-
+        // Resolve known tags to dart_id, pass unknown tags by name
         const tag = findTag(config.tags, tagInput);
-
-        if (!tag) {
-          invalidTags.push(tagInput);
-        } else {
-          resolvedTags.push(typeof tag === 'string' ? tag : tag.dart_id);
-        }
+        resolvedTags.push(tag ? (typeof tag === 'string' ? tag : tag.dart_id) : tagInput);
       }
-
-      if (invalidTags.length > 0) {
-        const tagNames = getTagNames(config.tags);
-        const availableTags = tagNames.slice(0, 20).join(', ') +
-          (tagNames.length > 20 ? `, ... (${tagNames.length - 20} more)` : '');
-        throw new ValidationError(
-          `Invalid tag(s): ${invalidTags.join(', ')} not found in workspace. Available tags: ${availableTags}`,
-          'tags',
-          tagNames
-        );
-      }
-
       resolvedUpdates.tags = resolvedTags;
     } else {
-      // Empty array means clear all tags
       resolvedUpdates.tags = [];
     }
   }

@@ -14,10 +14,8 @@ import {
   ValidationError,
   DartConfig,
   findDartboard,
-  findTag,
   findStatus,
   getDartboardNames,
-  getTagNames,
   getStatusNames,
 } from '../types/index.js';
 
@@ -147,28 +145,8 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   }
 
   // ============================================================================
-  // Step 5: Validate tags (if provided)
+  // Step 5: Tags - pass through as-is (Dart API creates new tags automatically)
   // ============================================================================
-  if (input.tags && Array.isArray(input.tags) && input.tags.length > 0) {
-    const invalidTags: string[] = [];
-
-    for (const tagInput of input.tags) {
-      if (!findTag(config.tags, tagInput)) {
-        invalidTags.push(tagInput);
-      }
-    }
-
-    if (invalidTags.length > 0) {
-      const tagNames = getTagNames(config.tags);
-      const availableTags = tagNames.slice(0, 20).join(', ') +
-        (tagNames.length > 20 ? `, ... (${tagNames.length - 20} more)` : '');
-      throw new ValidationError(
-        `Invalid tag(s): ${invalidTags.join(', ')} not found in workspace. Available tags: ${availableTags}`,
-        'tags',
-        tagNames
-      );
-    }
-  }
 
   // ============================================================================
   // Step 6: Validate status (if provided)

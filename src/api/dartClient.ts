@@ -35,6 +35,18 @@ interface DartAPIResponse<T> {
   };
 }
 
+/** Human-readable labels for HTTP status codes */
+const STATUS_LABELS: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Not Found',
+  429: 'Rate Limited',
+  500: 'Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+};
+
 /**
  * DartClient - Core API client for Dart AI
  *
@@ -169,90 +181,57 @@ export class DartClient {
   }
 
   /**
-   * Map HTTP status codes to appropriate error messages
+   * Map HTTP status codes to appropriate error messages.
+   * Extracts detail from multiple possible response body formats
+   * (Dart API may return { error: { message } }, { detail }, { message }, or plain text).
    */
   private async handleErrorResponse(response: Response): Promise<never> {
-    let errorData: DartAPIResponse<unknown> = {};
-    let errorMessage = response.statusText || 'Unknown error';
+    let responseBody: unknown;
+    let errorDetail = '';
 
-    // Try to extract error details from response body
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      try {
-        const text = await response.text();
-        if (text) {
-          errorData = JSON.parse(text) as DartAPIResponse<unknown>;
-          errorMessage = errorData.error?.message || errorMessage;
+    // Extract whatever the server sent back
+    try {
+      const text = await response.text();
+      if (text) {
+        const contentType = response.headers.get('content-type');
+        if (contentType?.includes('application/json')) {
+          const parsed = JSON.parse(text);
+          responseBody = parsed;
+          // Try common error response shapes
+          errorDetail =
+            parsed.error?.message ||    // { error: { message: "..." } }
+            parsed.detail ||            // DRF-style { detail: "..." }
+            parsed.message ||           // { message: "..." }
+            (typeof parsed.error === 'string' ? parsed.error : '') || // { error: "..." }
+            '';
+          // If still empty but the body is a flat object with string values, summarize it
+          if (!errorDetail && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            const fields = Object.entries(parsed)
+              .filter(([, v]) => v !== null && v !== undefined)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+              .slice(0, 5);
+            if (fields.length > 0) {
+              errorDetail = fields.join('; ');
+            }
+          }
+        } else {
+          // Non-JSON response body (plain text error)
+          errorDetail = text.slice(0, 500);
         }
-      } catch {
-        // Failed to parse error response - use status text
       }
+    } catch {
+      // Failed to read/parse response body
     }
 
-    switch (response.status) {
-      case 400:
-        throw new DartAPIError(
-          `Bad Request: ${errorMessage}`,
-          400,
-          errorData
-        );
+    const status = response.status;
+    const statusLabel = STATUS_LABELS[status] || `HTTP ${status}`;
+    const message = errorDetail || response.statusText || 'No details available';
 
-      case 401:
-        throw new DartAPIError(
-          `Unauthorized: Invalid or expired token. ${errorMessage}`,
-          401,
-          errorData
-        );
-
-      case 403:
-        throw new DartAPIError(
-          `Forbidden: Insufficient permissions. ${errorMessage}`,
-          403,
-          errorData
-        );
-
-      case 404:
-        throw new DartAPIError(
-          `Not Found: ${errorMessage}`,
-          404,
-          errorData
-        );
-
-      case 429:
-        throw new DartAPIError(
-          `Rate Limit Exceeded: ${errorMessage}`,
-          429,
-          errorData
-        );
-
-      case 500:
-        throw new DartAPIError(
-          `Internal Server Error: ${errorMessage}`,
-          500,
-          errorData
-        );
-
-      case 502:
-        throw new DartAPIError(
-          `Bad Gateway: ${errorMessage}`,
-          502,
-          errorData
-        );
-
-      case 503:
-        throw new DartAPIError(
-          `Service Unavailable: ${errorMessage}`,
-          503,
-          errorData
-        );
-
-      default:
-        throw new DartAPIError(
-          `HTTP ${response.status}: ${errorMessage}`,
-          response.status,
-          errorData
-        );
-    }
+    throw new DartAPIError(
+      `${statusLabel}: ${message}`,
+      status,
+      responseBody
+    );
   }
 
   /**

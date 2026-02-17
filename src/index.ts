@@ -72,6 +72,7 @@ import { handleAddTimeTracking } from './tools/add_time_tracking.js';
 import { handleAttachUrl } from './tools/attach_url.js';
 import { handleGetDartboard } from './tools/get_dartboard.js';
 import { handleGetFolder } from './tools/get_folder.js';
+import { DartAPIError, ValidationError, DartQLParseError } from './types/index.js';
 
 // Warn if DART_TOKEN is missing (but don't exit - tools will fail when called)
 const DART_TOKEN = process.env.DART_TOKEN;
@@ -81,6 +82,47 @@ if (!DART_TOKEN) {
 } else if (!DART_TOKEN.startsWith('dsa_')) {
   console.error('Warning: DART_TOKEN should start with "dsa_"');
   console.error('Check your token format at: https://app.dartai.com/?settings=account');
+}
+
+/**
+ * Format tool errors with structured details from typed error classes.
+ * Avoids redundant wrapping ("Bad Request: Bad Request") by surfacing
+ * the actual response body and relevant metadata.
+ */
+function formatToolError(toolName: string, error: unknown): string {
+  if (error instanceof ValidationError) {
+    const parts = [`[${toolName}] Validation error: ${error.message}`];
+    if (error.field) parts.push(`  field: ${error.field}`);
+    if (error.suggestions?.length) {
+      parts.push(`  suggestions: ${error.suggestions.slice(0, 10).join(', ')}`);
+    }
+    return parts.join('\n');
+  }
+
+  if (error instanceof DartQLParseError) {
+    const parts = [`[${toolName}] DartQL parse error: ${error.message}`];
+    if (error.position !== undefined) parts.push(`  position: ${error.position}`);
+    if (error.token) parts.push(`  token: ${error.token}`);
+    return parts.join('\n');
+  }
+
+  if (error instanceof DartAPIError) {
+    const parts = [`[${toolName}] API error (${error.statusCode}): ${error.message}`];
+    // Include raw response body if it has fields beyond what's already in the message
+    if (error.response && typeof error.response === 'object') {
+      const body = JSON.stringify(error.response);
+      if (body.length > 2 && body.length < 1000) {
+        parts.push(`  response: ${body}`);
+      }
+    }
+    return parts.join('\n');
+  }
+
+  if (error instanceof Error) {
+    return `[${toolName}] ${error.message}`;
+  }
+
+  return `[${toolName}] ${String(error)}`;
 }
 
 /**
@@ -1168,12 +1210,11 @@ class DartQueryServer {
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return {
           content: [
             {
               type: 'text',
-              text: `Error executing ${name}: ${errorMessage}`,
+              text: formatToolError(name, error),
             },
           ],
           isError: true,
