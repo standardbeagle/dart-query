@@ -12,7 +12,6 @@ import {
   DartConfig,
   DartDoc,
   CreateTaskInput,
-  UpdateTaskInput,
   ListTasksInput,
 } from '../types/index.js';
 
@@ -360,18 +359,17 @@ export class DartClient {
   /**
    * Update a task
    */
-  async updateTask(input: UpdateTaskInput): Promise<DartTask> {
-    if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
+  async updateTask(dartId: string, updates: Partial<DartTask>): Promise<DartTask> {
+    if (!dartId || typeof dartId !== 'string' || dartId.trim() === '') {
       throw new DartAPIError('dart_id is required and must be a non-empty string', 400);
     }
-    if (!input.updates || typeof input.updates !== 'object' || Object.keys(input.updates).length === 0) {
-      throw new DartAPIError('updates is required and must be a non-empty object', 400);
+    if (!updates || typeof updates !== 'object' || Object.keys(updates).length === 0) {
+      throw new DartAPIError('No fields to update', 400);
     }
-    const { dart_id, updates } = input;
 
     // Convert field names: snake_case → camelCase
     const apiUpdates: Record<string, unknown> = {
-      id: dart_id.trim(), // Required by API
+      id: dartId.trim(), // Required by API
     };
 
     if (updates.title !== undefined) apiUpdates.title = updates.title;
@@ -394,7 +392,7 @@ export class DartClient {
     if (updates.related_ids !== undefined) apiUpdates.relatedIds = updates.related_ids;
 
     // Wrap updates in item object as required by API
-    const response = await this.request<{ item: any }>('PUT', `/tasks/${encodeURIComponent(dart_id.trim())}`, { item: apiUpdates });
+    const response = await this.request<{ item: any }>('PUT', `/tasks/${encodeURIComponent(dartId.trim())}`, { item: apiUpdates });
     return this.mapTaskResponse(response.item);
   }
 

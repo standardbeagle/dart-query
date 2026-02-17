@@ -370,10 +370,11 @@ export interface GetTaskOutput {
   expanded_relationships?: ExpandedRelationships;
 }
 
-export interface UpdateTaskInput {
-  dart_id: string;
-  updates: Partial<Omit<DartTask, 'dart_id' | 'created_at' | 'updated_at'>>;
-}
+/**
+ * Flat input for update_task - all fields at top level alongside dart_id.
+ * Only dart_id is required; include any fields you want to change.
+ */
+export type UpdateTaskInput = { dart_id: string } & Partial<Omit<DartTask, 'dart_id' | 'created_at' | 'updated_at'>>;
 
 export interface UpdateTaskOutput {
   dart_id: string;

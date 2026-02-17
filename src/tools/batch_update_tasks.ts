@@ -231,10 +231,7 @@ export async function handleBatchUpdateTasks(
   const updatePromises = matchingTasks.map((task) =>
     limit(async () => {
       try {
-        await client.updateTask({
-          dart_id: task.dart_id,
-          updates: validatedUpdates,
-        });
+        await client.updateTask(task.dart_id, validatedUpdates);
 
         successfulDartIds.push(task.dart_id);
         addSuccessfulItem(batchOperationId, task.dart_id);

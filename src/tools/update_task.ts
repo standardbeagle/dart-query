@@ -2,6 +2,7 @@
  * update_task Tool Handler
  *
  * Updates an existing task with partial field updates.
+ * Flat input: dart_id + any fields to change at the same level.
  * Validates all references against workspace config before API call.
  * Only sends changed fields to the API for efficiency.
  *
@@ -29,26 +30,44 @@ import {
   getStatusNames,
 } from '../types/index.js';
 
+/** Fields that are valid update fields (everything except identifiers/timestamps) */
+const VALID_UPDATE_FIELDS = new Set([
+  'title', 'description', 'dartboard', 'status', 'priority', 'size',
+  'assignees', 'tags', 'due_at', 'start_at', 'parent_task',
+  'subtask_ids', 'blocker_ids', 'blocking_ids', 'duplicate_ids', 'related_ids',
+]);
+
+/** Common parameter mistakes LLMs make, mapped to the correct field */
+const FIELD_CORRECTIONS: Record<string, string> = {
+  task_id: 'dart_id',
+  id: 'dart_id',
+  taskId: 'dart_id',
+  task_name: 'title',
+  name: 'title',
+  board: 'dartboard',
+  assignee: 'assignees',
+  tag: 'tags',
+  due_date: 'due_at',
+  dueDate: 'due_at',
+  start_date: 'start_at',
+  startDate: 'start_at',
+  parent: 'parent_task',
+  parentId: 'parent_task',
+  parent_id: 'parent_task',
+  blockers: 'blocker_ids',
+  blocking: 'blocking_ids',
+  subtasks: 'subtask_ids',
+  duplicates: 'duplicate_ids',
+  related: 'related_ids',
+  // Detect old nested format
+  updates: 'NESTED_UPDATES',
+};
+
 /**
  * Handle update_task tool calls
  *
- * Flow:
- * 1. Validate dart_id is provided
- * 2. Validate updates object is non-empty
- * 3. Get workspace config for reference validation
- * 4. Validate all reference fields (dartboard, status, assignees, tags)
- * 5. Resolve names to dart_ids for all reference fields
- * 6. Validate priority, size, and date formats
- * 7. Validate relationship fields (subtask_ids, blocker_ids, blocking_ids,
- *    duplicate_ids, related_ids) - must be arrays of valid dart_id strings
- * 8. Call DartClient.updateTask() with only changed fields
- * 9. Generate deep link URL
- * 10. Return UpdateTaskOutput with updated_fields list (includes relationship fields)
- *
- * @param input - UpdateTaskInput with dart_id and updates object
- * @returns UpdateTaskOutput with dart_id, updated_fields, task (with relationship fields), url
- * @throws DartAPIError with 404 if task not found
- * @throws ValidationError if any reference or relationship field is invalid
+ * Accepts flat input: { dart_id, title?, status?, blocker_ids?, ... }
+ * Detects common LLM mistakes and provides corrective error messages.
  */
 export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTaskOutput> {
   const DART_TOKEN = process.env.DART_TOKEN;
@@ -61,7 +80,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   }
 
   // ============================================================================
-  // Step 1: Validate input and dart_id
+  // Step 1: Validate input and detect common mistakes
   // ============================================================================
   if (!input || typeof input !== 'object') {
     throw new ValidationError(
@@ -70,20 +89,77 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     );
   }
 
-  if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
+  // Detect nested { updates: {...} } format and give corrective error
+  if ('updates' in input && typeof (input as any).updates === 'object') {
+    const nested = (input as any).updates;
+    const fieldList = Object.keys(nested).join(', ');
+    throw new ValidationError(
+      `Do not wrap fields in an "updates" object. Pass fields directly alongside dart_id. ` +
+      `Instead of { dart_id, updates: { ${fieldList} } }, use { dart_id, ${fieldList} }`,
+      'updates'
+    );
+  }
+
+  // Detect task_id/id used instead of dart_id
+  const rawInput = input as Record<string, unknown>;
+  if (!rawInput.dart_id) {
+    if (rawInput.task_id) {
+      throw new ValidationError(
+        `Use "dart_id" not "task_id". Received task_id: "${rawInput.task_id}"`,
+        'dart_id'
+      );
+    }
+    if (rawInput.id) {
+      throw new ValidationError(
+        `Use "dart_id" not "id". Received id: "${rawInput.id}"`,
+        'dart_id'
+      );
+    }
+    if (rawInput.taskId) {
+      throw new ValidationError(
+        `Use "dart_id" not "taskId". Received taskId: "${rawInput.taskId}"`,
+        'dart_id'
+      );
+    }
     throw new ValidationError(
       'dart_id is required and must be a non-empty string',
       'dart_id'
     );
   }
 
-  // ============================================================================
-  // Step 2: Validate updates object
-  // ============================================================================
-  if (!input.updates || typeof input.updates !== 'object' || Object.keys(input.updates).length === 0) {
+  if (typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
     throw new ValidationError(
-      'updates is required and must be a non-empty object with at least one field to update',
-      'updates'
+      'dart_id must be a non-empty string',
+      'dart_id'
+    );
+  }
+
+  // Detect misspelled field names and suggest corrections
+  const corrections: string[] = [];
+  for (const key of Object.keys(rawInput)) {
+    if (key === 'dart_id') continue;
+    if (VALID_UPDATE_FIELDS.has(key)) continue;
+    const correction = FIELD_CORRECTIONS[key];
+    if (correction && correction !== 'NESTED_UPDATES') {
+      corrections.push(`"${key}" → use "${correction}" instead`);
+    }
+  }
+  if (corrections.length > 0) {
+    throw new ValidationError(
+      `Invalid field names: ${corrections.join(', ')}`,
+      corrections[0].split('"')[1]
+    );
+  }
+
+  // ============================================================================
+  // Step 2: Extract update fields (everything except dart_id)
+  // ============================================================================
+  const { dart_id, ...updateFields } = input;
+
+  if (Object.keys(updateFields).length === 0) {
+    throw new ValidationError(
+      'At least one field to update is required alongside dart_id (e.g., title, status, blocker_ids)',
+      'input'
     );
   }
 
@@ -94,7 +170,6 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   try {
     config = await handleGetConfig({ cache_bust: false });
   } catch (error) {
-    // Re-throw with enhanced context
     if (error instanceof DartAPIError) {
       throw new DartAPIError(
         `Failed to retrieve workspace config for validation: ${error.message}`,
@@ -111,9 +186,8 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   const resolvedUpdates: Partial<DartTask> = {};
   const updatedFields: string[] = [];
 
-  // Track which fields are being updated
-  for (const key of Object.keys(input.updates)) {
-    if (input.updates[key as keyof typeof input.updates] !== undefined) {
+  for (const key of Object.keys(updateFields)) {
+    if ((updateFields as any)[key] !== undefined) {
       updatedFields.push(key);
     }
   }
@@ -121,29 +195,28 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   // Step 5: Validate and resolve title
   // ============================================================================
-  if (input.updates.title !== undefined) {
-    if (typeof input.updates.title !== 'string' || input.updates.title.trim() === '') {
+  if (updateFields.title !== undefined) {
+    if (typeof updateFields.title !== 'string' || updateFields.title.trim() === '') {
       throw new ValidationError(
         'title must be a non-empty string',
         'title'
       );
     }
 
-    // Validate title length (max 500 chars per Dart API spec)
-    if (input.updates.title.length > 500) {
+    if (updateFields.title.length > 500) {
       throw new ValidationError(
-        `title exceeds maximum length of 500 characters (current: ${input.updates.title.length})`,
+        `title exceeds maximum length of 500 characters (current: ${updateFields.title.length})`,
         'title'
       );
     }
 
-    resolvedUpdates.title = input.updates.title;
+    resolvedUpdates.title = updateFields.title;
   }
 
   // ============================================================================
   // Step 6: Validate and resolve dartboard
   // ============================================================================
-  if (input.updates.dartboard !== undefined) {
+  if (updateFields.dartboard !== undefined) {
     if (!config.dartboards || config.dartboards.length === 0) {
       throw new ValidationError(
         'No dartboards found in workspace configuration. Cannot update dartboard.',
@@ -151,14 +224,14 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    const dartboard = findDartboard(config.dartboards, input.updates.dartboard!);
+    const dartboard = findDartboard(config.dartboards, updateFields.dartboard!);
 
     if (!dartboard) {
       const dartboardNames = getDartboardNames(config.dartboards);
       const availableDartboards = dartboardNames.slice(0, 10).join(', ') +
         (dartboardNames.length > 10 ? `, ... (${dartboardNames.length - 10} more)` : '');
       throw new ValidationError(
-        `Invalid dartboard: "${input.updates.dartboard}" not found in workspace. Available dartboards: ${availableDartboards}`,
+        `Invalid dartboard: "${updateFields.dartboard}" not found in workspace. Available dartboards: ${availableDartboards}`,
         'dartboard',
         dartboardNames
       );
@@ -170,7 +243,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   // Step 7: Validate and resolve status
   // ============================================================================
-  if (input.updates.status !== undefined) {
+  if (updateFields.status !== undefined) {
     if (!config.statuses || config.statuses.length === 0) {
       throw new ValidationError(
         'No statuses found in workspace configuration. Cannot update status.',
@@ -178,13 +251,13 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    const status = findStatus(config.statuses, input.updates.status!);
+    const status = findStatus(config.statuses, updateFields.status!);
 
     if (!status) {
       const statusNames = getStatusNames(config.statuses);
       const availableStatuses = statusNames.join(', ');
       throw new ValidationError(
-        `Invalid status: "${input.updates.status}" not found in workspace. Available statuses: ${availableStatuses}`,
+        `Invalid status: "${updateFields.status}" not found in workspace. Available statuses: ${availableStatuses}`,
         'status',
         statusNames
       );
@@ -196,15 +269,15 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   // Step 8: Validate and resolve assignees
   // ============================================================================
-  if (input.updates.assignees !== undefined) {
-    if (!Array.isArray(input.updates.assignees)) {
+  if (updateFields.assignees !== undefined) {
+    if (!Array.isArray(updateFields.assignees)) {
       throw new ValidationError(
         'assignees must be an array of assignee dart_ids, names, or emails',
         'assignees'
       );
     }
 
-    if (input.updates.assignees.length > 0) {
+    if (updateFields.assignees.length > 0) {
       if (!config.assignees || config.assignees.length === 0) {
         throw new ValidationError(
           'No assignees found in workspace configuration. Cannot update assignees.',
@@ -214,8 +287,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
 
       const invalidAssignees: string[] = [];
 
-      for (const assigneeId of input.updates.assignees) {
-        // Validate that each element is a string
+      for (const assigneeId of updateFields.assignees) {
         if (typeof assigneeId !== 'string') {
           throw new ValidationError(
             `assignees array must contain only strings, found: ${typeof assigneeId}`,
@@ -244,7 +316,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       }
 
       // Resolve assignee names/emails - use email if available, otherwise name
-      const resolvedAssignees = input.updates.assignees.map((assigneeIdOrName) => {
+      const resolvedAssignees = updateFields.assignees.map((assigneeIdOrName) => {
         const assignee = config.assignees.find(
           (a) => a.email === assigneeIdOrName || a.name === assigneeIdOrName
         );
@@ -253,7 +325,6 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
 
       resolvedUpdates.assignees = resolvedAssignees;
     } else {
-      // Empty array means clear all assignees
       resolvedUpdates.assignees = [];
     }
   }
@@ -261,24 +332,23 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   // Step 9: Resolve tags (pass through as-is, Dart API creates new tags)
   // ============================================================================
-  if (input.updates.tags !== undefined) {
-    if (!Array.isArray(input.updates.tags)) {
+  if (updateFields.tags !== undefined) {
+    if (!Array.isArray(updateFields.tags)) {
       throw new ValidationError(
         'tags must be an array of tag dart_ids or names',
         'tags'
       );
     }
 
-    if (input.updates.tags.length > 0) {
+    if (updateFields.tags.length > 0) {
       const resolvedTags: string[] = [];
-      for (const tagInput of input.updates.tags) {
+      for (const tagInput of updateFields.tags) {
         if (typeof tagInput !== 'string') {
           throw new ValidationError(
             `tags array must contain only strings, found: ${typeof tagInput}`,
             'tags'
           );
         }
-        // Resolve known tags to dart_id, pass unknown tags by name
         const tag = findTag(config.tags, tagInput);
         resolvedTags.push(tag ? (typeof tag === 'string' ? tag : tag.dart_id) : tagInput);
       }
@@ -291,7 +361,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   // Step 10: Validate priority and size
   // ============================================================================
-  if (input.updates.priority !== undefined) {
+  if (updateFields.priority !== undefined) {
     if (!config.priorities || config.priorities.length === 0) {
       throw new ValidationError(
         'No priorities found in workspace configuration. Cannot update priority.',
@@ -299,19 +369,18 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    // Priority is a number (1-5), but config has strings - validate range instead
-    if (typeof input.updates.priority !== 'number' || input.updates.priority < 1 || input.updates.priority > 5) {
+    if (typeof updateFields.priority !== 'number' || updateFields.priority < 1 || updateFields.priority > 5) {
       throw new ValidationError(
-        `Invalid priority: ${input.updates.priority}. Valid range: 1-5 (1=lowest, 5=highest)`,
+        `Invalid priority: ${updateFields.priority}. Valid range: 1-5 (1=lowest, 5=highest)`,
         'priority',
         ['1', '2', '3', '4', '5']
       );
     }
 
-    resolvedUpdates.priority = input.updates.priority;
+    resolvedUpdates.priority = updateFields.priority;
   }
 
-  if (input.updates.size !== undefined) {
+  if (updateFields.size !== undefined) {
     if (!config.sizes || config.sizes.length === 0) {
       throw new ValidationError(
         'No sizes found in workspace configuration. Cannot update size.',
@@ -319,61 +388,57 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    // Size is a number (1-5), but config has strings - validate range instead
-    if (typeof input.updates.size !== 'number' || input.updates.size < 1 || input.updates.size > 5) {
+    if (typeof updateFields.size !== 'number' || updateFields.size < 1 || updateFields.size > 5) {
       throw new ValidationError(
-        `Invalid size: ${input.updates.size}. Valid range: 1-5 (1=XS, 5=XL)`,
+        `Invalid size: ${updateFields.size}. Valid range: 1-5 (1=XS, 5=XL)`,
         'size',
         ['1', '2', '3', '4', '5']
       );
     }
 
-    resolvedUpdates.size = input.updates.size;
+    resolvedUpdates.size = updateFields.size;
   }
 
   // ============================================================================
   // Step 11: Validate date formats
   // ============================================================================
-  if (input.updates.due_at !== undefined) {
-    const dueDate = new Date(input.updates.due_at);
+  if (updateFields.due_at !== undefined) {
+    const dueDate = new Date(updateFields.due_at);
     if (isNaN(dueDate.getTime())) {
       throw new ValidationError(
-        `Invalid due_at date format: "${input.updates.due_at}". Expected ISO8601 format (e.g., "2026-01-17T10:00:00Z")`,
+        `Invalid due_at date format: "${updateFields.due_at}". Expected ISO8601 format (e.g., "2026-01-17T10:00:00Z")`,
         'due_at'
       );
     }
-    resolvedUpdates.due_at = input.updates.due_at;
+    resolvedUpdates.due_at = updateFields.due_at;
   }
 
-  if (input.updates.start_at !== undefined) {
-    const startDate = new Date(input.updates.start_at);
+  if (updateFields.start_at !== undefined) {
+    const startDate = new Date(updateFields.start_at);
     if (isNaN(startDate.getTime())) {
       throw new ValidationError(
-        `Invalid start_at date format: "${input.updates.start_at}". Expected ISO8601 format (e.g., "2026-01-17T10:00:00Z")`,
+        `Invalid start_at date format: "${updateFields.start_at}". Expected ISO8601 format (e.g., "2026-01-17T10:00:00Z")`,
         'start_at'
       );
     }
-    resolvedUpdates.start_at = input.updates.start_at;
+    resolvedUpdates.start_at = updateFields.start_at;
   }
 
   // ============================================================================
   // Step 12: Pass through other fields (description, parent_task, etc.)
   // ============================================================================
-  if (input.updates.description !== undefined) {
-    resolvedUpdates.description = input.updates.description;
+  if (updateFields.description !== undefined) {
+    resolvedUpdates.description = updateFields.description;
   }
 
-  if (input.updates.parent_task !== undefined) {
-    resolvedUpdates.parent_task = input.updates.parent_task;
+  if (updateFields.parent_task !== undefined) {
+    resolvedUpdates.parent_task = updateFields.parent_task;
   }
 
   // ============================================================================
-  // Step 12a: Validate and resolve relationship fields
-  // All relationship fields are string arrays with full replacement semantics
-  // Empty array [] clears all relationships of that type
+  // Step 13: Validate and resolve relationship fields
   // ============================================================================
 
-  // Helper function to validate relationship array
   const validateRelationshipArray = (
     fieldName: string,
     value: unknown
@@ -389,12 +454,10 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
-    // Empty array is valid - it clears all relationships
     if (value.length === 0) {
       return [];
     }
 
-    // Validate each element is a non-empty string
     for (let i = 0; i < value.length; i++) {
       const item = value[i];
       if (typeof item !== 'string') {
@@ -414,57 +477,47 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     return value as string[];
   };
 
-  // Validate and resolve subtask_ids
-  const subtaskIds = validateRelationshipArray('subtask_ids', input.updates.subtask_ids);
+  const subtaskIds = validateRelationshipArray('subtask_ids', updateFields.subtask_ids);
   if (subtaskIds !== undefined) {
     resolvedUpdates.subtask_ids = subtaskIds;
   }
 
-  // Validate and resolve blocker_ids
-  const blockerIds = validateRelationshipArray('blocker_ids', input.updates.blocker_ids);
+  const blockerIds = validateRelationshipArray('blocker_ids', updateFields.blocker_ids);
   if (blockerIds !== undefined) {
     resolvedUpdates.blocker_ids = blockerIds;
   }
 
-  // Validate and resolve blocking_ids
-  const blockingIds = validateRelationshipArray('blocking_ids', input.updates.blocking_ids);
+  const blockingIds = validateRelationshipArray('blocking_ids', updateFields.blocking_ids);
   if (blockingIds !== undefined) {
     resolvedUpdates.blocking_ids = blockingIds;
   }
 
-  // Validate and resolve duplicate_ids
-  const duplicateIds = validateRelationshipArray('duplicate_ids', input.updates.duplicate_ids);
+  const duplicateIds = validateRelationshipArray('duplicate_ids', updateFields.duplicate_ids);
   if (duplicateIds !== undefined) {
     resolvedUpdates.duplicate_ids = duplicateIds;
   }
 
-  // Validate and resolve related_ids
-  const relatedIds = validateRelationshipArray('related_ids', input.updates.related_ids);
+  const relatedIds = validateRelationshipArray('related_ids', updateFields.related_ids);
   if (relatedIds !== undefined) {
     resolvedUpdates.related_ids = relatedIds;
   }
 
   // ============================================================================
-  // Step 13: Call DartClient.updateTask()
+  // Step 14: Call DartClient.updateTask()
   // ============================================================================
   const client = new DartClient({ token: DART_TOKEN });
 
   let updatedTask: DartTask;
   try {
-    updatedTask = await client.updateTask({
-      dart_id: input.dart_id,
-      updates: resolvedUpdates,
-    });
+    updatedTask = await client.updateTask(dart_id, resolvedUpdates);
   } catch (error) {
-    // Handle 404 errors specifically
     if (error instanceof DartAPIError && error.statusCode === 404) {
       throw new DartAPIError(
-        `Task not found: No task with dart_id "${input.dart_id}" exists in workspace`,
+        `Task not found: No task with dart_id "${dart_id}" exists in workspace`,
         404,
         error.response
       );
     }
-    // Re-throw other errors with enhanced context
     if (error instanceof DartAPIError) {
       throw new DartAPIError(
         `Failed to update task: ${error.message}`,
@@ -476,7 +529,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   }
 
   // ============================================================================
-  // Step 14: Generate deep link URL and return output
+  // Step 15: Generate deep link URL and return output
   // ============================================================================
   const deepLinkUrl = `https://app.dartai.com/task/${updatedTask.dart_id}`;
 

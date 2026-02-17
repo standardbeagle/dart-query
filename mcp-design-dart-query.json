@@ -583,30 +583,28 @@
       {
         "name": "update_task",
         "group": "task-crud",
-        "description": "Update an existing task's properties (status, title, description, priority, assignees, etc.)",
+        "description": "Update a task. Pass dart_id and any fields to change at the top level (flat, no nesting).",
         "parameters": {
           "input_schema": {
             "dart_id": {
               "type": "string",
               "required": true,
-              "description": "Task dart_id to update"
+              "description": "Task dart_id to update (NOT task_id or id)"
             },
-            "updates": {
-              "type": "object",
-              "required": true,
-              "description": "Fields to update (only changed fields required)",
-              "properties": {
-                "title": "string",
-                "description": "string",
-                "status": "string (name or dart_id)",
-                "priority": "integer 1-5",
-                "size": "integer 1-5",
-                "assignees": "array<dart_id>",
-                "tags": "array<dart_id>",
-                "due_at": "iso8601 | null",
-                "start_at": "iso8601 | null"
-              }
-            }
+            "title": "string (max 500 chars)",
+            "description": "string (markdown)",
+            "status": "string (name or dart_id)",
+            "priority": "integer 1-5",
+            "size": "integer 1-5",
+            "assignees": "array<dart_id | name | email>",
+            "tags": "array<dart_id | name>",
+            "due_at": "iso8601 | null",
+            "start_at": "iso8601 | null",
+            "blocker_ids": "array<dart_id> (full replacement)",
+            "blocking_ids": "array<dart_id> (full replacement)",
+            "subtask_ids": "array<dart_id> (full replacement)",
+            "duplicate_ids": "array<dart_id> (full replacement)",
+            "related_ids": "array<dart_id> (full replacement)"
           },
           "output_schema": {
             "dart_id": "string",
@@ -1333,7 +1331,7 @@
         "name": "Search and Update Tasks",
         "steps": [
           "1. search_tasks(query='authentication bug', detail_level='minimal') → dart_ids",
-          "2. update_task(dart_id=dart_ids[0], updates={priority: 5, status: 'In Progress'})"
+          "2. update_task(dart_id=dart_ids[0], priority=5, status='In Progress')"
         ],
         "token_cost": "~400 tokens total",
         "efficiency_tips": "Use minimal detail level when only dart_ids are needed"

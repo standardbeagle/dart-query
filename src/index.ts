@@ -363,93 +363,87 @@ class DartQueryServer {
         },
         {
           name: 'update_task',
-          description: 'Update an existing task with partial field updates including task relationships (validates references, only sends changed fields). Relationship arrays use full replacement semantics - to add/remove, get current values, modify, then update with the full array.',
+          description: 'Update a task. Pass dart_id and any fields to change at the top level (do NOT nest fields inside an "updates" object). Only sends changed fields. Relationship arrays use full replacement semantics.',
           inputSchema: {
             type: 'object',
             properties: {
               dart_id: {
                 type: 'string',
-                description: 'Task dart_id to update',
+                description: 'Task dart_id to update (NOT "task_id" or "id")',
               },
-              updates: {
-                type: 'object',
-                description: 'Fields to update (partial DartTask object)',
-                properties: {
-                  title: {
-                    type: 'string',
-                    description: 'Task title (max 500 chars)',
-                  },
-                  description: {
-                    type: 'string',
-                    description: 'Task description (markdown supported)',
-                  },
-                  dartboard: {
-                    type: 'string',
-                    description: 'Dartboard dart_id or name',
-                  },
-                  status: {
-                    type: 'string',
-                    description: 'Status dart_id or name',
-                  },
-                  priority: {
-                    type: 'integer',
-                    description: 'Priority 1-5',
-                  },
-                  size: {
-                    type: 'integer',
-                    description: 'Size estimate 1-5',
-                  },
-                  assignees: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'Array of assignee dart_ids, names, or emails',
-                  },
-                  tags: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'Array of tag dart_ids or names',
-                  },
-                  due_at: {
-                    type: 'string',
-                    description: 'Due date (ISO8601)',
-                  },
-                  start_at: {
-                    type: 'string',
-                    description: 'Start date (ISO8601)',
-                  },
-                  parent_task: {
-                    type: 'string',
-                    description: 'Parent task dart_id',
-                  },
-                  subtask_ids: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'IDs of tasks that are subtasks (children) of this task. Full replacement: set to [] to clear all subtasks.',
-                  },
-                  blocker_ids: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'IDs of tasks that block this task. Full replacement: set to [] to clear all blockers.',
-                  },
-                  blocking_ids: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'IDs of tasks that this task is blocking. Full replacement: set to [] to clear.',
-                  },
-                  duplicate_ids: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'IDs of tasks that are duplicates of this task. Full replacement: set to [] to clear.',
-                  },
-                  related_ids: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'IDs of related tasks (loosely connected). Full replacement: set to [] to clear.',
-                  },
-                },
+              title: {
+                type: 'string',
+                description: 'Task title (max 500 chars)',
+              },
+              description: {
+                type: 'string',
+                description: 'Task description (markdown supported)',
+              },
+              dartboard: {
+                type: 'string',
+                description: 'Dartboard dart_id or name',
+              },
+              status: {
+                type: 'string',
+                description: 'Status dart_id or name',
+              },
+              priority: {
+                type: 'integer',
+                description: 'Priority 1-5',
+              },
+              size: {
+                type: 'integer',
+                description: 'Size estimate 1-5',
+              },
+              assignees: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Array of assignee dart_ids, names, or emails',
+              },
+              tags: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Array of tag dart_ids or names',
+              },
+              due_at: {
+                type: 'string',
+                description: 'Due date (ISO8601)',
+              },
+              start_at: {
+                type: 'string',
+                description: 'Start date (ISO8601)',
+              },
+              parent_task: {
+                type: 'string',
+                description: 'Parent task dart_id',
+              },
+              subtask_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of subtask (child) tasks. Full replacement: set to [] to clear.',
+              },
+              blocker_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of tasks that block this task. Full replacement: set to [] to clear.',
+              },
+              blocking_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of tasks this task blocks. Full replacement: set to [] to clear.',
+              },
+              duplicate_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of duplicate tasks. Full replacement: set to [] to clear.',
+              },
+              related_ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'IDs of related tasks. Full replacement: set to [] to clear.',
               },
             },
-            required: ['dart_id', 'updates'],
+            required: ['dart_id'],
           },
         },
         {
