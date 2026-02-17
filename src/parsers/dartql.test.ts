@@ -10,7 +10,6 @@ import {
   parseDartQLStatements,
   DartQLTokenizer,
   DartQLLexer,
-  DartQLStatementParser,
   TokenType,
   VALID_FIELDS,
   UPDATABLE_FIELDS,
