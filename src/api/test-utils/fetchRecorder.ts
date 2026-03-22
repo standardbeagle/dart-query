@@ -108,7 +108,7 @@ export function createFetchRecorder(cassetteName: string) {
 
     if (recording) {
       // RECORD: proxy through real fetch, capture response
-      globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as any).url;
         const method = init?.method || 'GET';
         const body = init?.body ? JSON.parse(init.body as string) : undefined;
@@ -151,7 +151,7 @@ export function createFetchRecorder(cassetteName: string) {
       };
     } else {
       // REPLAY: match against cassette exchanges
-      globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as any).url;
         const method = init?.method || 'GET';
         const endpoint = toEndpoint(url);
