@@ -1,0 +1,52 @@
+{
+  "name": "createTask",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v0/public/tasks",
+        "body": {
+          "item": {
+            "title": "New snapshot test task",
+            "dartboard": "db_eng",
+            "description": "Created by snapshot test",
+            "priority": 3,
+            "assignees": ["alice@example.com"]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "item": {
+            "id": "task_new_001",
+            "title": "New snapshot test task",
+            "description": "Created by snapshot test",
+            "status": "Open",
+            "priority": 3,
+            "createdAt": "2026-03-22T10:00:00Z",
+            "updatedAt": "2026-03-22T10:00:00Z",
+            "dueAt": null,
+            "startAt": null,
+            "completedAt": null,
+            "parentId": null,
+            "assignees": ["alice@example.com"],
+            "tags": [],
+            "dartboard": "Engineering",
+            "taskRelationships": {
+              "subtaskIds": [],
+              "blockerIds": [],
+              "blockingIds": [],
+              "duplicateIds": [],
+              "relatedIds": []
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "listTasks-status-filter",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/tasks/list?status_id=st_inprogress&limit=50"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "count": 1,
+          "results": [
+            {
+              "id": "task_010",
+              "title": "Deploy v2",
+              "status": "In Progress",
+              "priority": 4,
+              "createdAt": "2026-03-15T08:00:00Z",
+              "updatedAt": "2026-03-21T12:00:00Z",
+              "dueAt": "2026-03-25T00:00:00Z",
+              "assignees": ["alice@example.com"],
+              "dartboard": "DevOps"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

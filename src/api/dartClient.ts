@@ -292,12 +292,13 @@ export class DartClient {
 
     if (input) {
       if (input.assignee) queryParams.append('assignee', input.assignee);
-      if (input.status) queryParams.append('status', input.status);
-      if (input.dartboard) queryParams.append('dartboard', input.dartboard);
+      // After resolution, status/dartboard/tags contain dart_ids — use _id API params
+      if (input.status) queryParams.append('status_id', input.status);
+      if (input.dartboard) queryParams.append('dartboard_id', input.dartboard);
       if (input.priority !== undefined) queryParams.append('priority', input.priority.toString());
-      if (input.tags) input.tags.forEach(tag => queryParams.append('tags', tag));
-      if (input.due_before) queryParams.append('due_before', input.due_before);
-      if (input.due_after) queryParams.append('due_after', input.due_after);
+      if (input.tags) input.tags.forEach(tag => queryParams.append('tag_id', tag));
+      if (input.due_before) queryParams.append('due_at_before', input.due_before);
+      if (input.due_after) queryParams.append('due_at_after', input.due_after);
       if (input.limit !== undefined) queryParams.append('limit', input.limit.toString());
       if (input.offset !== undefined) queryParams.append('offset', input.offset.toString());
       if (input.detail_level) queryParams.append('detail_level', input.detail_level);
@@ -432,7 +433,8 @@ export class DartClient {
     const queryParams = new URLSearchParams();
 
     if (input) {
-      if (input.folder) queryParams.append('folder', input.folder);
+      // After resolution, folder contains a dart_id — use folder_id API param
+      if (input.folder) queryParams.append('folder_id', input.folder);
       if (input.title_contains) queryParams.append('title_contains', input.title_contains);
       if (input.text_contains) queryParams.append('text_contains', input.text_contains);
       if (input.limit !== undefined) queryParams.append('limit', input.limit.toString());
@@ -542,7 +544,7 @@ export class DartClient {
     }
 
     const queryParams = new URLSearchParams();
-    queryParams.append('task', input.task_id.trim());
+    queryParams.append('task_id', input.task_id.trim());
     if (input.limit !== undefined) queryParams.append('limit', input.limit.toString());
     if (input.offset !== undefined) queryParams.append('offset', input.offset.toString());
 

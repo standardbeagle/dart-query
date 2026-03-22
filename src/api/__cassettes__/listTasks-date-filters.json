@@ -1,0 +1,32 @@
+{
+  "name": "listTasks-date-filters",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/tasks/list?due_at_before=2026-04-01T00%3A00%3A00Z&due_at_after=2026-03-01T00%3A00%3A00Z&limit=50"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "count": 5,
+          "results": [
+            {
+              "id": "task_300",
+              "title": "March deadline task",
+              "status": "Open",
+              "priority": 3,
+              "createdAt": "2026-02-15T00:00:00Z",
+              "updatedAt": "2026-03-20T00:00:00Z",
+              "dueAt": "2026-03-25T00:00:00Z"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

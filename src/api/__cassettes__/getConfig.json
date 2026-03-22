@@ -1,0 +1,46 @@
+{
+  "name": "getConfig",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/config"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "data": {
+            "assignees": [
+              { "name": "Alice Smith", "email": "alice@example.com" },
+              { "name": "Bob Jones", "email": "bob@example.com" }
+            ],
+            "dartboards": [
+              { "dart_id": "db_eng", "name": "Engineering" },
+              { "dart_id": "db_devops", "name": "DevOps" }
+            ],
+            "statuses": [
+              { "dart_id": "st_open", "name": "Open" },
+              { "dart_id": "st_inprogress", "name": "In Progress" },
+              { "dart_id": "st_done", "name": "Done" }
+            ],
+            "tags": [
+              { "dart_id": "tag_bug", "name": "bug" },
+              { "dart_id": "tag_urgent", "name": "urgent" }
+            ],
+            "priorities": [
+              { "value": 1, "label": "Low" },
+              { "value": 3, "label": "Medium" },
+              { "value": 5, "label": "Critical" }
+            ],
+            "sizes": [],
+            "folders": []
+          }
+        }
+      }
+    }
+  ]
+}

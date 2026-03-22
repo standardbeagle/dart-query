@@ -1,0 +1,24 @@
+{
+  "name": "deleteTask",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "DELETE",
+        "endpoint": "/api/v0/public/tasks/task_temp"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "item": {
+            "id": "task_temp",
+            "title": "Temporary task"
+          }
+        }
+      }
+    }
+  ]
+}

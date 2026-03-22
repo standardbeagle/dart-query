@@ -1,0 +1,31 @@
+{
+  "name": "listTasks-no-filters",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/tasks/list"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "count": 150,
+          "results": [
+            {
+              "id": "task_100",
+              "title": "First task",
+              "status": "Open",
+              "priority": 1,
+              "createdAt": "2026-01-01T00:00:00Z",
+              "updatedAt": "2026-03-20T00:00:00Z"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

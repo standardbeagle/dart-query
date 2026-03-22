@@ -1,0 +1,43 @@
+{
+  "name": "updateTask",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "endpoint": "/api/v0/public/tasks/task_001",
+        "body": {
+          "item": {
+            "id": "task_001",
+            "title": "Fix login bug (updated)",
+            "priority": 5
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "item": {
+            "id": "task_001",
+            "title": "Fix login bug (updated)",
+            "description": "Users cannot log in with SSO",
+            "status": "In Progress",
+            "priority": 5,
+            "createdAt": "2026-03-01T10:00:00Z",
+            "updatedAt": "2026-03-22T11:00:00Z",
+            "dueAt": "2026-04-01T00:00:00Z",
+            "startAt": "2026-03-05T00:00:00Z",
+            "completedAt": null,
+            "parentId": null,
+            "assignees": ["alice@example.com"],
+            "tags": ["bug"],
+            "dartboard": "Engineering"
+          }
+        }
+      }
+    }
+  ]
+}

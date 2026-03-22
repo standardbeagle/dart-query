@@ -1,6 +1,6 @@
 {
   "name": "@standardbeagle/dart-query",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Production-ready MCP server for Dart AI task management with batch operations, SQL-like selectors, CSV import, and zero context rot",
   "mcpName": "io.github.standardbeagle/dart-query",
   "type": "module",
@@ -20,6 +20,7 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:record": "DART_RECORD=true vitest run src/api/dartClient.test.ts",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run typecheck && npm run build"

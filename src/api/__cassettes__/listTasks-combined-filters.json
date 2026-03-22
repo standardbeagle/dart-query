@@ -1,0 +1,35 @@
+{
+  "name": "listTasks-combined-filters",
+  "recorded_at": "2026-03-22T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/tasks/list?assignee=alice%40example.com&status_id=st_open&dartboard_id=db_eng&priority=3&tag_id=tag_urgent&due_at_before=2026-04-01T00%3A00%3A00Z&due_at_after=2026-03-01T00%3A00%3A00Z&limit=25&offset=10"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "count": 15,
+          "results": [
+            {
+              "id": "task_050",
+              "title": "Urgent: Fix API timeout",
+              "status": "Open",
+              "priority": 3,
+              "createdAt": "2026-03-10T10:00:00Z",
+              "updatedAt": "2026-03-21T09:00:00Z",
+              "dueAt": "2026-03-28T00:00:00Z",
+              "assignees": ["alice@example.com"],
+              "tags": ["urgent"],
+              "dartboard": "Engineering"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
