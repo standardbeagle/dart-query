@@ -291,17 +291,18 @@ export class DartClient {
     const queryParams = new URLSearchParams();
 
     if (input) {
+      // Disable default filters so explicit filters work correctly
+      queryParams.append('no_defaults', 'true');
       if (input.assignee) queryParams.append('assignee', input.assignee);
-      // After resolution, status/dartboard/tags contain dart_ids — use _id API params
-      if (input.status) queryParams.append('status_id', input.status);
-      if (input.dartboard) queryParams.append('dartboard_id', input.dartboard);
+      // Config returns names (strings), not IDs — use name-based API params
+      if (input.status) queryParams.append('status', input.status);
+      if (input.dartboard) queryParams.append('dartboard', input.dartboard);
       if (input.priority !== undefined) queryParams.append('priority', input.priority.toString());
-      if (input.tags) input.tags.forEach(tag => queryParams.append('tag_id', tag));
+      if (input.tags) input.tags.forEach(tag => queryParams.append('tag', tag));
       if (input.due_before) queryParams.append('due_at_before', input.due_before);
       if (input.due_after) queryParams.append('due_at_after', input.due_after);
       if (input.limit !== undefined) queryParams.append('limit', input.limit.toString());
       if (input.offset !== undefined) queryParams.append('offset', input.offset.toString());
-      if (input.detail_level) queryParams.append('detail_level', input.detail_level);
     }
 
     const query = queryParams.toString();
@@ -433,8 +434,8 @@ export class DartClient {
     const queryParams = new URLSearchParams();
 
     if (input) {
-      // After resolution, folder contains a dart_id — use folder_id API param
-      if (input.folder) queryParams.append('folder_id', input.folder);
+      // Config returns folder names (strings), not IDs — use name-based param
+      if (input.folder) queryParams.append('folder', input.folder);
       if (input.title_contains) queryParams.append('title_contains', input.title_contains);
       if (input.text_contains) queryParams.append('text_contains', input.text_contains);
       if (input.limit !== undefined) queryParams.append('limit', input.limit.toString());

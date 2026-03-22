@@ -5,7 +5,7 @@
     {
       "request": {
         "method": "GET",
-        "endpoint": "/api/v0/public/tasks/list?due_at_before=2026-04-01T00%3A00%3A00Z&due_at_after=2026-03-01T00%3A00%3A00Z&limit=50"
+        "endpoint": "/api/v0/public/tasks/list?no_defaults=true&due_at_before=2026-04-01T00%3A00%3A00Z&due_at_after=2026-03-01T00%3A00%3A00Z&limit=50"
       },
       "response": {
         "status": 200,
@@ -19,7 +19,7 @@
               "id": "task_300",
               "title": "March deadline task",
               "status": "Open",
-              "priority": 3,
+              "priority": "medium",
               "createdAt": "2026-02-15T00:00:00Z",
               "updatedAt": "2026-03-20T00:00:00Z",
               "dueAt": "2026-03-25T00:00:00Z"

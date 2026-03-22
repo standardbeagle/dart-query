@@ -5,7 +5,7 @@
     {
       "request": {
         "method": "GET",
-        "endpoint": "/api/v0/public/tasks/list?dartboard_id=db_abc123&limit=10"
+        "endpoint": "/api/v0/public/tasks/list?no_defaults=true&dartboard=Personal%2Fdart-query&limit=10"
       },
       "response": {
         "status": 200,
@@ -16,19 +16,20 @@
           "count": 2,
           "results": [
             {
-              "id": "task_001",
-              "title": "Fix login bug",
-              "status": "In Progress",
-              "priority": 3,
-              "createdAt": "2026-03-01T10:00:00Z",
-              "updatedAt": "2026-03-20T14:30:00Z",
-              "dueAt": "2026-04-01T00:00:00Z",
+              "id": "G61I3EqkxBCP",
+              "title": "add_task_comment returns 404 for newly-created tasks",
+              "dartboard": "Personal/dart-query",
+              "type": "Task",
+              "status": "To Do",
+              "assignees": [],
+              "tags": ["Bug", "comments", "timing"],
+              "priority": null,
+              "createdAt": "2026-02-17T11:12:51.548398-08:00",
+              "updatedAt": "2026-02-17T11:12:52.195631-08:00",
+              "dueAt": null,
               "startAt": null,
               "completedAt": null,
               "parentId": null,
-              "assignees": ["alice@example.com"],
-              "tags": [],
-              "dartboard": "Engineering",
               "taskRelationships": {
                 "subtaskIds": [],
                 "blockerIds": [],
@@ -38,25 +39,26 @@
               }
             },
             {
-              "id": "task_002",
-              "title": "Add unit tests",
-              "status": "Open",
-              "priority": 2,
-              "createdAt": "2026-03-05T09:00:00Z",
-              "updatedAt": "2026-03-19T16:00:00Z",
+              "id": "CmQChIkvxV9c",
+              "title": "update_task returns 'blockerIds: This field is not recognized' error",
+              "dartboard": "Personal/dart-query",
+              "type": "Task",
+              "status": "To Do",
+              "assignees": [],
+              "tags": ["Bug", "relationships", "update_task"],
+              "priority": null,
+              "createdAt": "2026-02-17T11:12:49.754117-08:00",
+              "updatedAt": "2026-02-17T11:12:50.435815-08:00",
               "dueAt": null,
-              "startAt": "2026-03-10T00:00:00Z",
+              "startAt": null,
               "completedAt": null,
-              "parentId": "task_001",
-              "assignees": ["bob@example.com"],
-              "tags": ["backend"],
-              "dartboard": "Engineering",
+              "parentId": null,
               "taskRelationships": {
                 "subtaskIds": [],
-                "blockerIds": ["task_001"],
+                "blockerIds": [],
                 "blockingIds": [],
                 "duplicateIds": [],
-                "relatedIds": ["task_003"]
+                "relatedIds": []
               }
             }
           ]

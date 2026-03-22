@@ -5,7 +5,7 @@
     {
       "request": {
         "method": "GET",
-        "endpoint": "/api/v0/public/tasks/list"
+        "endpoint": "/api/v0/public/tasks/list?no_defaults=true"
       },
       "response": {
         "status": 200,
@@ -19,7 +19,7 @@
               "id": "task_100",
               "title": "First task",
               "status": "Open",
-              "priority": 1,
+              "priority": "low",
               "createdAt": "2026-01-01T00:00:00Z",
               "updatedAt": "2026-03-20T00:00:00Z"
             }

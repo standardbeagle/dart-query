@@ -5,7 +5,7 @@
     {
       "request": {
         "method": "GET",
-        "endpoint": "/api/v0/public/tasks/list?tag_id=tag_bug&tag_id=tag_critical&limit=50"
+        "endpoint": "/api/v0/public/tasks/list?no_defaults=true&tag=Bug&tag=critical&limit=50"
       },
       "response": {
         "status": 200,
@@ -19,31 +19,11 @@
               "id": "task_200",
               "title": "Critical bug in auth",
               "status": "Open",
-              "priority": 5,
+              "priority": "critical",
               "createdAt": "2026-03-20T00:00:00Z",
               "updatedAt": "2026-03-21T00:00:00Z",
-              "tags": ["bug", "critical"],
+              "tags": ["Bug", "critical"],
               "dartboard": "Engineering"
-            },
-            {
-              "id": "task_201",
-              "title": "Bug in payment flow",
-              "status": "In Progress",
-              "priority": 4,
-              "createdAt": "2026-03-18T00:00:00Z",
-              "updatedAt": "2026-03-21T00:00:00Z",
-              "tags": ["bug", "critical"],
-              "dartboard": "Engineering"
-            },
-            {
-              "id": "task_202",
-              "title": "Critical: Data loss on export",
-              "status": "Open",
-              "priority": 5,
-              "createdAt": "2026-03-19T00:00:00Z",
-              "updatedAt": "2026-03-22T00:00:00Z",
-              "tags": ["bug", "critical"],
-              "dartboard": "Data"
             }
           ]
         }

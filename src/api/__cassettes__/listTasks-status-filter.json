@@ -5,7 +5,7 @@
     {
       "request": {
         "method": "GET",
-        "endpoint": "/api/v0/public/tasks/list?status_id=st_inprogress&limit=50"
+        "endpoint": "/api/v0/public/tasks/list?no_defaults=true&status=In+Progress&limit=50"
       },
       "response": {
         "status": 200,
@@ -19,7 +19,7 @@
               "id": "task_010",
               "title": "Deploy v2",
               "status": "In Progress",
-              "priority": 4,
+              "priority": "high",
               "createdAt": "2026-03-15T08:00:00Z",
               "updatedAt": "2026-03-21T12:00:00Z",
               "dueAt": "2026-03-25T00:00:00Z",
