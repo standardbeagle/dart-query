@@ -1,0 +1,31 @@
+{
+  "name": "moveTask",
+  "recorded_at": "2026-03-23T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v0/public/tasks/task_001/move",
+        "body": {
+          "dartboard": "Personal/beagle-term",
+          "order": 5,
+          "afterId": "task_prev",
+          "beforeId": "task_next"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "item": {
+            "id": "task_001",
+            "title": "Moved task",
+            "dartboard": "Personal/beagle-term",
+            "createdAt": "2026-03-01T00:00:00Z",
+            "updatedAt": "2026-03-23T00:00:00Z"
+          }
+        }
+      }
+    }
+  ]
+}

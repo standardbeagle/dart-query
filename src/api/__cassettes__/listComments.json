@@ -1,0 +1,28 @@
+{
+  "name": "listComments",
+  "recorded_at": "2026-03-23T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/comments/list?task_id=G61I3EqkxBCP&limit=5"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "count": 1,
+          "results": [
+            {
+              "id": "comment_001",
+              "text": "Investigating this issue",
+              "author": { "dart_id": "user_1", "name": "Andy Brummer" },
+              "publishedAt": "2026-03-20T10:00:00Z",
+              "parentId": null
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

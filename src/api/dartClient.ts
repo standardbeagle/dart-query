@@ -436,16 +436,21 @@ export class DartClient {
     if (input) {
       // Config returns folder names (strings), not IDs — use name-based param
       if (input.folder) queryParams.append('folder', input.folder);
-      if (input.title_contains) queryParams.append('title_contains', input.title_contains);
-      if (input.text_contains) queryParams.append('text_contains', input.text_contains);
+      // API uses "title" and "text" (not "title_contains" / "text_contains")
+      if (input.title_contains) queryParams.append('title', input.title_contains);
+      if (input.text_contains) queryParams.append('text', input.text_contains);
       if (input.limit !== undefined) queryParams.append('limit', input.limit.toString());
       if (input.offset !== undefined) queryParams.append('offset', input.offset.toString());
     }
 
     const query = queryParams.toString();
-    const endpoint = query ? `/docs?${query}` : '/docs';
+    const endpoint = query ? `/docs/list?${query}` : '/docs/list';
 
-    return this.request<{ docs: DartDoc[]; total: number }>('GET', endpoint);
+    const response = await this.request<{ count: number; results: any[] }>('GET', endpoint);
+    return {
+      docs: response.results || [],
+      total: response.count || 0,
+    };
   }
 
   /**

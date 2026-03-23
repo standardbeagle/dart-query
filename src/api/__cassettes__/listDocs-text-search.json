@@ -1,0 +1,27 @@
+{
+  "name": "listDocs-text-search",
+  "recorded_at": "2026-03-23T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/docs/list?title=API&text=authentication&limit=50"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "count": 2,
+          "results": [
+            {
+              "id": "doc_010",
+              "title": "API Authentication Guide",
+              "text": "How to set up authentication...",
+              "folder": "General/SB Docs"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

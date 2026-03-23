@@ -1,0 +1,49 @@
+{
+  "name": "updateTask-all-fields",
+  "recorded_at": "2026-03-23T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "PUT",
+        "endpoint": "/api/v0/public/tasks/task_001",
+        "body": {
+          "item": {
+            "id": "task_001",
+            "title": "Updated title",
+            "description": "Updated desc",
+            "dartboard": "Personal/dart-query",
+            "status": "Doing",
+            "priority": "critical",
+            "assignees": ["bob@example.com"],
+            "tags": ["urgent"],
+            "dueAt": "2026-05-01T00:00:00Z",
+            "startAt": "2026-04-01T00:00:00Z",
+            "parentId": "parent_999",
+            "taskRelationships": {
+              "subtaskIds": ["sub_a"],
+              "blockerIds": ["block_b"],
+              "blockingIds": ["blocking_c"],
+              "duplicateIds": ["dup_d"],
+              "relatedIds": ["rel_e"]
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "item": {
+            "id": "task_001",
+            "title": "Updated title",
+            "description": "Updated desc",
+            "status": "Doing",
+            "priority": "critical",
+            "createdAt": "2026-03-01T00:00:00Z",
+            "updatedAt": "2026-03-23T00:00:00Z"
+          }
+        }
+      }
+    }
+  ]
+}

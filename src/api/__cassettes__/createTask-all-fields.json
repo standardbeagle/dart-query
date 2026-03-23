@@ -1,0 +1,58 @@
+{
+  "name": "createTask-all-fields",
+  "recorded_at": "2026-03-23T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v0/public/tasks",
+        "body": {
+          "item": {
+            "title": "Full field test",
+            "dartboard": "Personal/dart-query",
+            "description": "Testing all fields",
+            "status": "To Do",
+            "priority": "high",
+            "assignees": ["alice@example.com"],
+            "tags": ["Bug"],
+            "dueAt": "2026-04-01T00:00:00Z",
+            "startAt": "2026-03-25T00:00:00Z",
+            "parentId": "parent_123",
+            "taskRelationships": {
+              "blockerIds": ["blocker_1"],
+              "subtaskIds": ["sub_1"]
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "item": {
+            "id": "task_full_001",
+            "title": "Full field test",
+            "dartboard": "Personal/dart-query",
+            "description": "Testing all fields",
+            "status": "To Do",
+            "priority": "high",
+            "assignees": ["alice@example.com"],
+            "tags": ["Bug"],
+            "dueAt": "2026-04-01T00:00:00Z",
+            "startAt": "2026-03-25T00:00:00Z",
+            "parentId": "parent_123",
+            "createdAt": "2026-03-23T00:00:00Z",
+            "updatedAt": "2026-03-23T00:00:00Z",
+            "taskRelationships": {
+              "blockerIds": ["blocker_1"],
+              "subtaskIds": ["sub_1"],
+              "blockingIds": [],
+              "duplicateIds": [],
+              "relatedIds": []
+            }
+          }
+        }
+      }
+    }
+  ]
+}

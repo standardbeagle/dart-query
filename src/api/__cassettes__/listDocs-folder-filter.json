@@ -1,0 +1,29 @@
+{
+  "name": "listDocs-folder-filter",
+  "recorded_at": "2026-03-23T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/docs/list?folder=Personal%2Fstuff&limit=10"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "count": 1,
+          "results": [
+            {
+              "id": "doc_001",
+              "title": "Test Document",
+              "text": "Some content",
+              "folder": "Personal/stuff",
+              "createdAt": "2026-03-01T00:00:00Z",
+              "updatedAt": "2026-03-20T00:00:00Z"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

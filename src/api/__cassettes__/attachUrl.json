@@ -1,0 +1,27 @@
+{
+  "name": "attachUrl",
+  "recorded_at": "2026-03-23T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "endpoint": "/api/v0/public/tasks/task_001/attachments/from-url",
+        "body": {
+          "url": "https://example.com/doc.pdf",
+          "filename": "design-spec.pdf"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "item": {
+            "id": "attach_001",
+            "url": "https://example.com/doc.pdf",
+            "filename": "design-spec.pdf"
+          }
+        }
+      }
+    }
+  ]
+}
