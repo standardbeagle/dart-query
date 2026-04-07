@@ -364,7 +364,7 @@ class DartQueryServer {
         },
         {
           name: 'update_task',
-          description: 'Update a task. Pass dart_id and any fields to change at the top level (do NOT nest fields inside an "updates" object). Only sends changed fields. Relationship arrays use full replacement semantics.',
+          description: 'Update a task. Pass dart_id and any fields to change at the top level. Supports add_to/remove_from for incremental relationship changes and optional comment. Relationship arrays use full replacement unless using add_to/remove_from.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -442,6 +442,32 @@ class DartQueryServer {
                 type: 'array',
                 items: { type: 'string' },
                 description: 'IDs of related tasks. Full replacement: set to [] to clear.',
+              },
+              comment: {
+                type: 'string',
+                description: 'Optional comment to add after updating (non-blocking)',
+              },
+              add_to: {
+                type: 'object',
+                description: 'Append IDs to relationship arrays. Fetches current values, merges, deduplicates. Keys: subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids',
+                properties: {
+                  subtask_ids: { type: 'array', items: { type: 'string' } },
+                  blocker_ids: { type: 'array', items: { type: 'string' } },
+                  blocking_ids: { type: 'array', items: { type: 'string' } },
+                  duplicate_ids: { type: 'array', items: { type: 'string' } },
+                  related_ids: { type: 'array', items: { type: 'string' } },
+                },
+              },
+              remove_from: {
+                type: 'object',
+                description: 'Remove IDs from relationship arrays. Fetches current values, filters out specified IDs. Keys: subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids',
+                properties: {
+                  subtask_ids: { type: 'array', items: { type: 'string' } },
+                  blocker_ids: { type: 'array', items: { type: 'string' } },
+                  blocking_ids: { type: 'array', items: { type: 'string' } },
+                  duplicate_ids: { type: 'array', items: { type: 'string' } },
+                  related_ids: { type: 'array', items: { type: 'string' } },
+                },
               },
             },
             required: ['dart_id'],

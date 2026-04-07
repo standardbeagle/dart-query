@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-04-07
+
+### Added
+- **`comment` parameter on `update_task`** — add a comment in the same call as a status/field update, eliminating the most common two-call pattern (non-blocking: update succeeds even if comment fails)
+- **`add_to` / `remove_from` parameters on `update_task`** — incrementally add or remove IDs from relationship arrays without manually fetching, merging, and replacing. Supports all relationship fields: `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`
+- 18 new TDD tests for comment and relationship merge features
+
 ## [0.9.0] - 2026-04-07
 
 ### Fixed

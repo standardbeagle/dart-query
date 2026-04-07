@@ -29,6 +29,8 @@ import {
   getDartboardNames,
   getStatusNames,
   resolveDartId,
+  RELATIONSHIP_FIELDS,
+  RelationshipField,
 } from '../types/index.js';
 
 /** Fields that are valid update fields (everything except identifiers/timestamps) */
@@ -36,6 +38,7 @@ const VALID_UPDATE_FIELDS = new Set([
   'title', 'description', 'dartboard', 'status', 'priority', 'size',
   'assignees', 'tags', 'due_at', 'start_at', 'parent_task',
   'subtask_ids', 'blocker_ids', 'blocking_ids', 'duplicate_ids', 'related_ids',
+  'comment', 'add_to', 'remove_from',
 ]);
 
 /** Common parameter mistakes LLMs make, mapped to the correct field */
@@ -125,9 +128,44 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   // Step 2: Extract update fields (everything except dart_id)
   // ============================================================================
-  const { dart_id, ...updateFields } = input;
+  const { dart_id, comment, add_to, remove_from, ...updateFields } = input;
 
-  if (Object.keys(updateFields).length === 0) {
+  // Validate comment if provided
+  if (comment !== undefined) {
+    if (typeof comment !== 'string' || comment.trim() === '') {
+      throw new ValidationError('comment must be a non-empty string', 'comment');
+    }
+  }
+
+  // Validate add_to / remove_from
+  const relationshipFieldSet = new Set<string>(RELATIONSHIP_FIELDS);
+  for (const [opName, opValue] of [['add_to', add_to], ['remove_from', remove_from]] as const) {
+    if (opValue === undefined) continue;
+    if (typeof opValue !== 'object' || opValue === null) {
+      throw new ValidationError(`${opName} must be an object`, opName);
+    }
+    for (const [field, ids] of Object.entries(opValue)) {
+      if (!relationshipFieldSet.has(field)) {
+        throw new ValidationError(
+          `${opName} only supports relationship fields: ${RELATIONSHIP_FIELDS.join(', ')}`,
+          opName
+        );
+      }
+      if (!Array.isArray(ids)) {
+        throw new ValidationError(`${opName}.${field} must be an array of dart_ids`, opName);
+      }
+      // Check for conflict: direct field + add_to/remove_from on same field
+      if ((updateFields as any)[field] !== undefined) {
+        throw new ValidationError(
+          `Cannot use both direct "${field}" and ${opName}.${field} — use one or the other`,
+          field
+        );
+      }
+    }
+  }
+
+  const hasAddRemoveOps = add_to !== undefined || remove_from !== undefined;
+  if (Object.keys(updateFields).length === 0 && !hasAddRemoveOps && comment === undefined) {
     throw new ValidationError(
       'At least one field to update is required alongside dart_id (e.g., title, status, blocker_ids)',
       'input'
@@ -474,33 +512,87 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   }
 
   // ============================================================================
-  // Step 14: Call DartClient.updateTask()
+  // Step 14: Resolve add_to / remove_from by fetching current task
   // ============================================================================
   const client = new DartClient({ token: DART_TOKEN });
 
-  let updatedTask: DartTask;
-  try {
-    updatedTask = await client.updateTask(dart_id, resolvedUpdates);
-  } catch (error) {
-    if (error instanceof DartAPIError && error.statusCode === 404) {
-      throw new DartAPIError(
-        `Task not found: No task with dart_id "${dart_id}" exists in workspace`,
-        404,
-        error.response
-      );
+  if (hasAddRemoveOps) {
+    const currentTask = await client.getTask(dart_id);
+
+    // Collect all relationship fields touched by add_to/remove_from
+    const touchedFields = new Set<RelationshipField>();
+    if (add_to) Object.keys(add_to).forEach(f => touchedFields.add(f as RelationshipField));
+    if (remove_from) Object.keys(remove_from).forEach(f => touchedFields.add(f as RelationshipField));
+
+    for (const field of touchedFields) {
+      const current = (currentTask[field] as string[] | undefined) ?? [];
+      let merged = [...current];
+
+      // Add new IDs (deduplicate)
+      if (add_to?.[field]) {
+        const addIds = add_to[field]!;
+        const existing = new Set(merged);
+        for (const id of addIds) {
+          if (!existing.has(id)) merged.push(id);
+        }
+      }
+
+      // Remove specified IDs
+      if (remove_from?.[field]) {
+        const removeSet = new Set(remove_from[field]!);
+        merged = merged.filter(id => !removeSet.has(id));
+      }
+
+      resolvedUpdates[field] = merged;
+      if (!updatedFields.includes(field)) updatedFields.push(field);
     }
-    if (error instanceof DartAPIError) {
-      throw new DartAPIError(
-        `Failed to update task: ${error.message}`,
-        error.statusCode,
-        error.response
-      );
-    }
-    throw error;
   }
 
   // ============================================================================
-  // Step 15: Generate deep link URL and return output
+  // Step 16: Call DartClient.updateTask() (skip if comment-only)
+  // ============================================================================
+
+  let updatedTask: DartTask;
+  if (Object.keys(resolvedUpdates).length === 0) {
+    // Comment-only update — just fetch current task
+    updatedTask = await client.getTask(dart_id);
+  } else {
+    try {
+      updatedTask = await client.updateTask(dart_id, resolvedUpdates);
+    } catch (error) {
+      if (error instanceof DartAPIError && error.statusCode === 404) {
+        throw new DartAPIError(
+          `Task not found: No task with dart_id "${dart_id}" exists in workspace`,
+          404,
+          error.response
+        );
+      }
+      if (error instanceof DartAPIError) {
+        throw new DartAPIError(
+          `Failed to update task: ${error.message}`,
+          error.statusCode,
+          error.response
+        );
+      }
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // Step 17: Add comment if provided (non-blocking — update already succeeded)
+  // ============================================================================
+  let commentAdded: boolean | undefined;
+  if (comment) {
+    try {
+      await client.addComment(dart_id, comment.trim());
+      commentAdded = true;
+    } catch {
+      commentAdded = false;
+    }
+  }
+
+  // ============================================================================
+  // Step 18: Generate deep link URL and return output
   // ============================================================================
   const deepLinkUrl = `https://app.dartai.com/task/${updatedTask.dart_id}`;
 
@@ -509,5 +601,6 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     updated_fields: updatedFields,
     task: updatedTask,
     url: deepLinkUrl,
+    ...(commentAdded !== undefined && { comment_added: commentAdded }),
   };
 }

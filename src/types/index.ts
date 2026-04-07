@@ -374,13 +374,25 @@ export interface GetTaskOutput {
  * Flat input for update_task - all fields at top level alongside dart_id.
  * Only dart_id is required; include any fields you want to change.
  */
-export type UpdateTaskInput = { dart_id: string } & Partial<Omit<DartTask, 'dart_id' | 'created_at' | 'updated_at'>>;
+/** Relationship field names that support add_to/remove_from operations */
+export const RELATIONSHIP_FIELDS = ['subtask_ids', 'blocker_ids', 'blocking_ids', 'duplicate_ids', 'related_ids'] as const;
+export type RelationshipField = typeof RELATIONSHIP_FIELDS[number];
+
+export type UpdateTaskInput = { dart_id: string } & Partial<Omit<DartTask, 'dart_id' | 'created_at' | 'updated_at'>> & {
+  /** Optional comment to add after updating the task */
+  comment?: string;
+  /** Append IDs to relationship arrays (merges with existing, deduplicates) */
+  add_to?: Partial<Record<RelationshipField, string[]>>;
+  /** Remove IDs from relationship arrays */
+  remove_from?: Partial<Record<RelationshipField, string[]>>;
+};
 
 export interface UpdateTaskOutput {
   dart_id: string;
   updated_fields: string[];
   task: DartTask;
   url: string;
+  comment_added?: boolean;
 }
 
 export interface DeleteTaskInput {
