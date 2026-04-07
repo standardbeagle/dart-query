@@ -273,6 +273,10 @@ class DartQueryServer {
                 items: { type: 'string' },
                 description: 'IDs of tasks that are related to this task (loosely connected). Each ID must be a valid dart_id format.',
               },
+              comment: {
+                type: 'string',
+                description: 'Optional comment to add after creating the task (non-blocking)',
+              },
             },
             required: ['title', 'dartboard'],
           },

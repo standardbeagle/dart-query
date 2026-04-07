@@ -300,6 +300,8 @@ export interface CreateTaskInput {
   duplicate_ids?: string[];
   /** IDs of tasks that are related to this task */
   related_ids?: string[];
+  /** Optional comment to add after creating the task (non-blocking) */
+  comment?: string;
 }
 
 export interface CreateTaskOutput {
@@ -308,6 +310,7 @@ export interface CreateTaskOutput {
   url: string;
   created_at: string;
   all_fields: DartTask;
+  comment_added?: boolean;
 }
 
 export interface GetTaskInput {

@@ -277,7 +277,20 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   const url = (createdTask as any).htmlUrl || `https://app.dartai.com/task/${taskWithDartId.dart_id}`;
 
   // ============================================================================
-  // Step 13: Return CreateTaskOutput
+  // Step 13: Add optional comment (non-blocking)
+  // ============================================================================
+  let comment_added: boolean | undefined;
+  if (input.comment && input.comment.trim()) {
+    try {
+      await client.addComment(taskWithDartId.dart_id, input.comment);
+      comment_added = true;
+    } catch {
+      // Non-blocking: task creation succeeded, comment failed silently
+    }
+  }
+
+  // ============================================================================
+  // Step 14: Return CreateTaskOutput
   // ============================================================================
   return {
     dart_id: taskWithDartId.dart_id,
@@ -285,5 +298,6 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
     url,
     created_at: taskWithDartId.created_at,
     all_fields: taskWithDartId,
+    ...(comment_added !== undefined && { comment_added }),
   };
 }
