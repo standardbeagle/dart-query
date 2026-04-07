@@ -9,6 +9,7 @@ import { DartClient } from '../api/dartClient.js';
 import {
   DartAPIError,
   ValidationError,
+  resolveDartId,
   DeleteTaskInput,
   DeleteTaskOutput,
 } from '../types/index.js';
@@ -49,12 +50,8 @@ export async function handleDeleteTask(input: DeleteTaskInput): Promise<DeleteTa
     );
   }
 
-  if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
-    throw new ValidationError(
-      'dart_id is required and must be a non-empty string',
-      'dart_id'
-    );
-  }
+  // Accept id, task_id, or taskId as aliases for dart_id
+  input.dart_id = resolveDartId(input as unknown as Record<string, unknown>);
 
   // ============================================================================
   // Step 2: Call DartClient.deleteTask()

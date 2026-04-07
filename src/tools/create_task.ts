@@ -166,18 +166,7 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   // ============================================================================
   // Step 7: Validate priority (if provided)
   // ============================================================================
-  if (input.priority !== undefined && input.priority !== null) {
-    // Priority validation is now string-based
-    // But the input is number (1-5), so no validation needed
-  }
-
-  // ============================================================================
-  // Step 8: Validate size (if provided)
-  // ============================================================================
-  if (input.size !== undefined && input.size !== null) {
-    // Size validation is now string-based
-    // But the input is number (1-5), so no validation needed
-  }
+  // Priority and size are integers (1-5), validated by schema
 
   // ============================================================================
   // Step 9: Validate relationship fields (format check only, not existence)

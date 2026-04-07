@@ -11,6 +11,7 @@ import {
   AddTimeTrackingOutput,
   DartAPIError,
   ValidationError,
+  resolveDartId,
 } from '../types/index.js';
 
 // ISO8601 date pattern
@@ -37,9 +38,8 @@ export async function handleAddTimeTracking(input: AddTimeTrackingInput): Promis
     throw new ValidationError('Input must be an object', 'input');
   }
 
-  if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
-    throw new ValidationError('dart_id is required and must be a non-empty string', 'dart_id');
-  }
+  // Accept id, task_id, or taskId as aliases for dart_id
+  input.dart_id = resolveDartId(input as unknown as Record<string, unknown>);
 
   if (!input.started_at || typeof input.started_at !== 'string') {
     throw new ValidationError('started_at is required and must be an ISO8601 string', 'started_at');

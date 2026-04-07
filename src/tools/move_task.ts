@@ -12,6 +12,7 @@ import {
   MoveTaskOutput,
   DartAPIError,
   ValidationError,
+  resolveDartId,
   findDartboard,
   getDartboardNames,
 } from '../types/index.js';
@@ -37,9 +38,8 @@ export async function handleMoveTask(input: MoveTaskInput): Promise<MoveTaskOutp
     throw new ValidationError('Input must be an object', 'input');
   }
 
-  if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
-    throw new ValidationError('dart_id is required and must be a non-empty string', 'dart_id');
-  }
+  // Accept id, task_id, or taskId as aliases for dart_id
+  input.dart_id = resolveDartId(input as unknown as Record<string, unknown>);
 
   // At least one positioning option should be provided
   if (input.dartboard === undefined && input.order === undefined &&

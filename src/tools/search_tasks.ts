@@ -401,6 +401,8 @@ function applyProgressiveDetail(
         assignees: result.assignees,
         dartboard: result.dartboard,
         dartboard_id: result.dartboard_id,
+        parent_task: result.parent_task,
+        blocker_ids: result.blocker_ids,
         created_at: result.created_at,
         updated_at: result.updated_at,
         relevance_score: result.relevance_score,
@@ -410,6 +412,8 @@ function applyProgressiveDetail(
       return {
         dart_id: result.dart_id,
         title: result.title,
+        parent_task: result.parent_task,
+        blocker_ids: result.blocker_ids,
         created_at: result.created_at,
         updated_at: result.updated_at,
         relevance_score: result.relevance_score,

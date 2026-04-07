@@ -19,6 +19,7 @@ import {
   GetTaskOutput,
   RelationshipCounts,
   ExpandedRelationships,
+  resolveDartId,
   RelatedTaskSummary,
 } from '../types/index.js';
 
@@ -150,12 +151,8 @@ export async function handleGetTask(input: GetTaskInput): Promise<GetTaskOutput>
     );
   }
 
-  if (!input.dart_id || typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
-    throw new DartAPIError(
-      'dart_id is required and must be a non-empty string',
-      400
-    );
-  }
+  // Accept id, task_id, or taskId as aliases for dart_id
+  input.dart_id = resolveDartId(input as unknown as Record<string, unknown>);
 
   // Default include_relationships to true
   const includeRelationships = input.include_relationships !== false;

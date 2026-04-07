@@ -28,6 +28,7 @@ import {
   findTag,
   getDartboardNames,
   getStatusNames,
+  resolveDartId,
 } from '../types/index.js';
 
 /** Fields that are valid update fields (everything except identifiers/timestamps) */
@@ -100,39 +101,9 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     );
   }
 
-  // Detect task_id/id used instead of dart_id
-  const rawInput = input as Record<string, unknown>;
-  if (!rawInput.dart_id) {
-    if (rawInput.task_id) {
-      throw new ValidationError(
-        `Use "dart_id" not "task_id". Received task_id: "${rawInput.task_id}"`,
-        'dart_id'
-      );
-    }
-    if (rawInput.id) {
-      throw new ValidationError(
-        `Use "dart_id" not "id". Received id: "${rawInput.id}"`,
-        'dart_id'
-      );
-    }
-    if (rawInput.taskId) {
-      throw new ValidationError(
-        `Use "dart_id" not "taskId". Received taskId: "${rawInput.taskId}"`,
-        'dart_id'
-      );
-    }
-    throw new ValidationError(
-      'dart_id is required and must be a non-empty string',
-      'dart_id'
-    );
-  }
-
-  if (typeof input.dart_id !== 'string' || input.dart_id.trim() === '') {
-    throw new ValidationError(
-      'dart_id must be a non-empty string',
-      'dart_id'
-    );
-  }
+  // Accept id, task_id, or taskId as aliases for dart_id
+  const rawInput = input as unknown as Record<string, unknown>;
+  input.dart_id = resolveDartId(rawInput);
 
   // Detect misspelled field names and suggest corrections
   const corrections: string[] = [];

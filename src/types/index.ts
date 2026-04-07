@@ -55,8 +55,8 @@ export interface DartTask extends TaskRelationships {
   description?: string;
   status?: string;
   status_id?: string;
-  priority?: string; // "critical", "high", "medium", "low"
-  size?: string; // e.g., "small", "medium", "large", "xs", "xl"
+  priority?: number; // 1-5 (1=lowest, 5=highest)
+  size?: number; // 1-5 (1=XS, 5=XL)
   assignees?: string[];
   tags?: string[];
   dartboard?: string;
@@ -282,8 +282,8 @@ export interface CreateTaskInput {
   description?: string;
   dartboard: string;
   status?: string;
-  priority?: string; // "critical", "high", "medium", "low"
-  size?: string; // e.g., "small", "medium", "large", "xs", "xl"
+  priority?: number; // 1-5 (1=lowest, 5=highest)
+  size?: number; // 1-5 (1=XS, 5=XL)
   assignees?: string[];
   tags?: string[];
   due_at?: string;
@@ -398,7 +398,7 @@ export interface ListTasksInput {
   assignee?: string;
   status?: string;
   dartboard?: string;
-  priority?: string | number; // "critical", "high", "medium", "low" or numeric value 0-5
+  priority?: number; // 1-5 (1=lowest, 5=highest)
   tags?: string[];
   due_before?: string;
   due_after?: string;
@@ -759,6 +759,18 @@ export class ValidationError extends Error {
     super(message);
     this.name = 'ValidationError';
   }
+}
+
+/**
+ * Resolve dart_id from input, accepting id, task_id, or taskId as aliases.
+ * Returns the resolved dart_id string or throws ValidationError.
+ */
+export function resolveDartId(input: Record<string, unknown>): string {
+  const dartId = input.dart_id ?? input.id ?? input.task_id ?? input.taskId;
+  if (!dartId || typeof dartId !== 'string' || dartId.trim() === '') {
+    throw new ValidationError('dart_id is required and must be a non-empty string', 'dart_id');
+  }
+  return dartId.trim();
 }
 
 export class DartQLParseError extends Error {

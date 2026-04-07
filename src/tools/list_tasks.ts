@@ -446,25 +446,30 @@ function applyDetailLevel(
 
   return tasks.map((task) => {
     if (detailLevel === 'minimal') {
-      // minimal: id + title only
+      // minimal: id + title + parent/blockers
       return {
         dart_id: task.dart_id,
         title: task.title,
+        parent_task: task.parent_task,
+        blocker_ids: task.blocker_ids,
         created_at: task.created_at,
         updated_at: task.updated_at,
       } as DartTask;
     }
 
-    // standard: id + title + status + assignee + priority
+    // standard: id + title + description + status + assignee + priority + parent/blockers
     return {
       dart_id: task.dart_id,
       title: task.title,
+      description: task.description,
       status: task.status,
       status_id: task.status_id,
       priority: task.priority,
       assignees: task.assignees,
       dartboard: task.dartboard,
       dartboard_id: task.dartboard_id,
+      parent_task: task.parent_task,
+      blocker_ids: task.blocker_ids,
       created_at: task.created_at,
       updated_at: task.updated_at,
     } as DartTask;

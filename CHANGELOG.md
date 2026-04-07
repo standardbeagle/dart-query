@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-04-07
+
+### Fixed
+- **priority/size type mismatch** — DartTask interface now uses `number` (1-5) matching the Dart API and tool schemas, fixing round-trip incompatibility
+- **list_tasks standard detail** now includes `description`, `parent_task`, and `blocker_ids`
+- **list_tasks minimal detail** now includes `parent_task` and `blocker_ids`
+- **search_tasks medium/low relevance** now includes `parent_task` and `blocker_ids`
+- **import_tasks_csv** correctly converts priority/size from CSV strings to numbers
+
+### Added
+- **`resolveDartId()` helper** — all task modification tools now accept `id`, `task_id`, or `taskId` as aliases for `dart_id`, enabling seamless round-tripping from get/list responses into update/delete/move operations
+- Applied to: `get_task`, `update_task`, `delete_task`, `move_task`, `add_task_comment`, `add_time_tracking`, `attach_url`
+
+### Changed
+- Cleaned up dead validation code in `create_task` for priority/size
+
 ## [0.6.1] - 2026-02-17
 
 ### Changed

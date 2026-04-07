@@ -331,7 +331,7 @@ class DartQueryServer {
               detail_level: {
                 type: 'string',
                 enum: ['minimal', 'standard', 'full'],
-                description: 'minimal=id+title, standard=+status+assignee+priority, full=all fields including relationships',
+                description: 'minimal=id+title+parent+blockers, standard=+description+status+assignee+priority, full=all fields including relationships',
               },
             },
           },
@@ -370,7 +370,7 @@ class DartQueryServer {
             properties: {
               dart_id: {
                 type: 'string',
-                description: 'Task dart_id to update (NOT "task_id" or "id")',
+                description: 'Task dart_id (also accepts "id" or "task_id")',
               },
               title: {
                 type: 'string',
@@ -455,7 +455,7 @@ class DartQueryServer {
             properties: {
               dart_id: {
                 type: 'string',
-                description: 'Task dart_id to delete',
+                description: 'Task dart_id (also accepts "id" or "task_id")',
               },
             },
             required: ['dart_id'],
@@ -780,7 +780,7 @@ class DartQueryServer {
             properties: {
               dart_id: {
                 type: 'string',
-                description: 'Task dart_id to add comment to',
+                description: 'Task dart_id (also accepts "id" or "task_id")',
               },
               text: {
                 type: 'string',
@@ -822,7 +822,7 @@ class DartQueryServer {
             properties: {
               dart_id: {
                 type: 'string',
-                description: 'Task dart_id to move',
+                description: 'Task dart_id (also accepts "id" or "task_id")',
               },
               dartboard: {
                 type: 'string',
@@ -852,7 +852,7 @@ class DartQueryServer {
             properties: {
               dart_id: {
                 type: 'string',
-                description: 'Task dart_id to add time entry to',
+                description: 'Task dart_id (also accepts "id" or "task_id")',
               },
               started_at: {
                 type: 'string',
@@ -882,7 +882,7 @@ class DartQueryServer {
             properties: {
               dart_id: {
                 type: 'string',
-                description: 'Task dart_id to attach file to',
+                description: 'Task dart_id (also accepts "id" or "task_id")',
               },
               url: {
                 type: 'string',

@@ -11,6 +11,7 @@ import {
   AddTaskCommentOutput,
   DartAPIError,
   ValidationError,
+  resolveDartId,
 } from '../types/index.js';
 
 /**
@@ -46,15 +47,8 @@ export async function handleAddTaskComment(
 
   const typedInput = input as Partial<AddTaskCommentInput>;
 
-  // Validate dart_id
-  if (!typedInput.dart_id || typeof typedInput.dart_id !== 'string') {
-    throw new ValidationError(
-      'dart_id is required and must be a non-empty string',
-      'dart_id'
-    );
-  }
-
-  const dartId = typedInput.dart_id.trim();
+  // Accept id, task_id, or taskId as aliases for dart_id
+  const dartId = resolveDartId(input as unknown as Record<string, unknown>);
   if (!dartId) {
     throw new ValidationError(
       'dart_id cannot be empty or whitespace-only',
