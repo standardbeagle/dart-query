@@ -53,6 +53,14 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   // ============================================================================
   // Step 1: Validate required fields
   // ============================================================================
+
+  // Detect common LLM mistake: wrapping parameters in { item: { ... } }
+  const rawInput = input as unknown as Record<string, unknown>;
+  if ('item' in rawInput && typeof rawInput.item === 'object' && rawInput.item !== null && !('title' in rawInput)) {
+    // Silently unwrap - LLM used { item: { title, dartboard, ... } } instead of flat params
+    input = rawInput.item as CreateTaskInput;
+  }
+
   if (!input.title || typeof input.title !== 'string' || input.title.trim() === '') {
     throw new ValidationError(
       'title is required and must be a non-empty string',
