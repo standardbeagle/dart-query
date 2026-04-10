@@ -776,13 +776,13 @@ class DartQueryServer {
         // Search
         {
           name: 'search_tasks',
-          description: 'Full-text search across tasks with relevance ranking. Alternative to list_tasks for text-based discovery. Supports quoted phrases and exclusions.',
+          description: 'Full-text search across tasks with relevance ranking. Alternative to list_tasks for text-based discovery. Supports quoted phrases, exclusions (-term), and inline filters (dartboard:Name, status:Done, assignee:Name).',
           inputSchema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: 'Search query. Supports quoted phrases ("exact match"), exclusions (-term), and regular terms.',
+                description: 'Search query. Supports quoted phrases ("exact match"), exclusions (-term), inline filters (dartboard:Name, status:Done), and regular terms.',
               },
               dartboard: {
                 type: 'string',

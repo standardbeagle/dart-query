@@ -726,6 +726,7 @@ export interface SearchTasksOutput {
     terms: string[];
     phrases: string[];
     exclusions: string[];
+    filters: Record<string, string>;
   };
   search_method: 'api' | 'client_side';
 }

@@ -57,8 +57,15 @@ export async function handleSearchTasks(input: SearchTasksInput): Promise<Search
   // Parse query into structured search terms
   const queryParsed = parseQuery(query);
 
-  // Validate that we have at least some search terms (not just exclusions)
+  // Validate that we have at least some search terms (not just exclusions and filters)
   if (queryParsed.terms.length === 0 && queryParsed.phrases.length === 0) {
+    // If only filters were provided (e.g. "dartboard:X"), that's a list operation not search
+    if (Object.keys(queryParsed.filters).length > 0) {
+      throw new ValidationError(
+        'query must contain search terms in addition to filters. Use list_tasks for filter-only queries.',
+        'query'
+      );
+    }
     throw new ValidationError(
       'query must contain at least one search term or phrase (not just exclusions)',
       'query'
@@ -68,18 +75,22 @@ export async function handleSearchTasks(input: SearchTasksInput): Promise<Search
   // Validate limit
   const limit = validateLimit(safeInput.limit);
 
-  // Resolve dartboard if provided
+  // Resolve dartboard: explicit parameter takes precedence over inline filter
   let dartboardId: string | undefined;
-  if (safeInput.dartboard) {
-    dartboardId = await resolveDartboard(safeInput.dartboard, client);
+  const dartboardName = safeInput.dartboard || queryParsed.filters.dartboard;
+  if (dartboardName) {
+    dartboardId = await resolveDartboard(dartboardName, client);
   }
 
-  // Try API search endpoint first (if available in future)
-  // For now, we'll use client-side search as fallback
-  const searchMethod = 'client_side'; // TODO: Implement API search when endpoint is available
+  // Resolve other inline filters
+  const statusFilter = queryParsed.filters.status;
+  const assigneeFilter = queryParsed.filters.assignee;
 
-  // Fetch all tasks for client-side search
-  const tasks = await fetchAllTasks(client, dartboardId, safeInput.include_completed);
+  // Client-side search: fetch tasks matching filters, then score locally
+  const searchMethod = 'client_side';
+
+  // Fetch tasks for client-side search
+  const tasks = await fetchAllTasks(client, dartboardId, safeInput.include_completed, statusFilter, assigneeFilter);
 
   // Perform client-side search with relevance scoring
   const searchResults = performClientSideSearch(tasks, queryParsed);
@@ -107,28 +118,45 @@ export async function handleSearchTasks(input: SearchTasksInput): Promise<Search
  * Supports:
  * - Quoted phrases: "exact match"
  * - Exclusions: -term (exclude results with term)
+ * - Inline filters: dartboard:Name, status:Done, assignee:Name, priority:3
  * - Regular terms: word word2
  */
 interface QueryParsed {
   terms: string[];
   phrases: string[];
   exclusions: string[];
+  filters: Record<string, string>;
 }
+
+/** Filter keys that are extracted from the query string and used as API filters */
+const INLINE_FILTER_KEYS = new Set(['dartboard', 'status', 'assignee', 'priority']);
 
 function parseQuery(query: string): QueryParsed {
   const phrases: string[] = [];
   const exclusions: string[] = [];
   const terms: string[] = [];
+  const filters: Record<string, string> = {};
 
   let remaining = query;
+  let match: RegExpExecArray | null;
+
+  // Extract inline filters first (key:value where key is a known filter)
+  // Supports quoted values: dartboard:"My Board" or dartboard:'My Board'
+  // and unquoted values: dartboard:Personal/agnt
+  const filterRegex = /(\w+):(?:"([^"]+)"|'([^']+)'|(\S+))/g;
+  while ((match = filterRegex.exec(remaining)) !== null) {
+    const key = match[1].toLowerCase();
+    const value = match[2] || match[3] || match[4];
+    if (INLINE_FILTER_KEYS.has(key)) {
+      filters[key] = value;
+      remaining = remaining.replace(match[0], ' ');
+    }
+  }
 
   // Extract quoted phrases (both " and ')
   const phraseRegex = /["']([^"']+)["']/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = phraseRegex.exec(query)) !== null) {
+  while ((match = phraseRegex.exec(remaining)) !== null) {
     phrases.push(match[1].toLowerCase());
-    // Remove matched phrase from remaining string
     remaining = remaining.replace(match[0], ' ');
   }
 
@@ -136,7 +164,6 @@ function parseQuery(query: string): QueryParsed {
   const exclusionRegex = /-(\w+)/g;
   while ((match = exclusionRegex.exec(remaining)) !== null) {
     exclusions.push(match[1].toLowerCase());
-    // Remove matched exclusion from remaining string
     remaining = remaining.replace(match[0], ' ');
   }
 
@@ -148,7 +175,7 @@ function parseQuery(query: string): QueryParsed {
 
   terms.push(...remainingTerms);
 
-  return { terms, phrases, exclusions };
+  return { terms, phrases, exclusions, filters };
 }
 
 /**
@@ -221,41 +248,38 @@ async function resolveDartboard(dartboard: string, client: DartClient): Promise<
 }
 
 /**
- * Fetch all tasks for client-side search
- * Uses pagination to fetch all tasks (up to reasonable limit)
+ * Fetch tasks for client-side search using pagination.
+ * When no dartboard filter is provided, caps at 2000 tasks to avoid
+ * overwhelming the Dart API with many paginated requests.
  */
 async function fetchAllTasks(
   client: DartClient,
   dartboardId?: string,
-  includeCompleted?: boolean
+  includeCompleted?: boolean,
+  status?: string,
+  assignee?: string,
 ): Promise<DartTask[]> {
   const allTasks: DartTask[] = [];
-  const fetchLimit = 500; // Max per request
-  const maxTotalTasks = 10000; // Safety limit to prevent memory issues
+  const fetchLimit = 100; // Smaller pages to avoid API 500 errors on large responses
+  const maxTotalTasks = dartboardId ? 10000 : 2000; // Tighter limit without dartboard filter
   let offset = 0;
   let hasMore = true;
 
   while (hasMore && allTasks.length < maxTotalTasks) {
     const response = await client.listTasks({
       dartboard: dartboardId,
+      status,
+      assignee,
       limit: fetchLimit,
       offset,
-      detail_level: 'full', // Need full text for search
     });
 
     allTasks.push(...response.tasks);
 
-    // Check if we have more tasks to fetch
     hasMore = offset + fetchLimit < response.total;
     offset += fetchLimit;
-
-    // Safety break
-    if (allTasks.length >= maxTotalTasks) {
-      break;
-    }
   }
 
-  // Filter out completed tasks if not included
   if (!includeCompleted) {
     return allTasks.filter(task => !task.completed_at);
   }
