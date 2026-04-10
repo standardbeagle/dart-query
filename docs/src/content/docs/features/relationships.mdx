@@ -1,8 +1,132 @@
 ---
 title: Relationships
-description: Managing task relationships including blockers, subtasks, and related tasks.
+description: Managing task relationships including subtasks, blockers, duplicates, and related tasks.
 sidebar:
   order: 2
 ---
 
-Content coming soon.
+## Task Relationship Types
+
+dart-query supports five relationship types for modeling task dependencies:
+
+| Type | Field | Meaning |
+|------|-------|---------|
+| **Subtasks** | `subtask_ids` | Child tasks that compose a parent task |
+| **Blockers** | `blocker_ids` | Tasks that must complete before this task can proceed |
+| **Blocking** | `blocking_ids` | Tasks that this task is blocking |
+| **Duplicates** | `duplicate_ids` | Tasks that duplicate this task |
+| **Related** | `related_ids` | Tasks with a logical connection but no dependency |
+
+## Creating Tasks with Relationships
+
+Set relationships at creation time by passing arrays of dart_id values:
+
+```typescript
+create_task({
+  title: "Deploy OAuth2 to production",
+  dartboard: "Engineering/backend",
+  priority: "high",
+  blocker_ids: ["duid_oauth_impl"]
+})
+
+create_task({
+  title: "Update user documentation",
+  dartboard: "Documentation",
+  related_ids: ["duid_oauth_impl", "duid_api_docs"],
+  blocking_ids: ["duid_release_v2"]
+})
+```
+
+## Updating Relationships
+
+Use `update_task` to modify relationships on existing tasks.
+
+**Full replacement semantics:** providing a relationship array replaces all existing values for that type. Omitting a field leaves it unchanged.
+
+```typescript
+// Set blockers (replaces any existing blockers)
+update_task({
+  dart_id: "duid_deploy_task",
+  blocker_ids: ["duid_testing", "duid_code_review"]
+})
+
+// Clear all blockers
+update_task({
+  dart_id: "duid_deploy_task",
+  blocker_ids: []
+})
+
+// Link related tasks (does not affect blockers or other types)
+update_task({
+  dart_id: "duid_feature_a",
+  related_ids: ["duid_feature_b", "duid_feature_c"]
+})
+```
+
+### Safe Modification Pattern
+
+To add a relationship without losing existing ones, read the current state first:
+
+```typescript
+// Step 1: Get current relationships
+const task = get_task({ dart_id: "duid_deploy_task" })
+// task.blocker_ids = ["duid_testing"]
+
+// Step 2: Append and update
+update_task({
+  dart_id: "duid_deploy_task",
+  blocker_ids: [...task.blocker_ids, "duid_code_review"]
+})
+// blocker_ids is now ["duid_testing", "duid_code_review"]
+```
+
+## Viewing Relationships
+
+`get_task` returns relationship IDs by default. Use `expand_relationships: true` to include titles:
+
+```typescript
+get_task({ dart_id: "duid_task123", expand_relationships: true })
+// {
+//   blocker_ids: ["duid_design_review"],
+//   blocking_ids: ["duid_deploy_prod"],
+//   expanded_relationships: {
+//     blockers: [{ dart_id: "duid_design_review", title: "Design review meeting" }],
+//     blocking: [{ dart_id: "duid_deploy_prod", title: "Deploy to production" }]
+//   },
+//   relationship_counts: { subtasks: 0, blockers: 1, blocking: 1, duplicates: 0, related: 0 }
+// }
+```
+
+Use `include_relationships: false` to exclude relationship data entirely and save tokens.
+
+## CSV Import with Relationships
+
+Relationship columns in CSV use comma-separated dart_id values:
+
+```csv
+title,priority,blocker_ids,related_ids,tags
+"Deploy to production",critical,"duid_testing,duid_code_review",,deployment
+"Write unit tests",high,,"duid_feature_impl","testing,quality"
+"Code review",medium,"duid_feature_impl",,review
+```
+
+Wrap values in quotes when they contain commas. Column names are flexible: `blockers`, `blocked_by`, and `blocker_ids` all map to the same field.
+
+## Relationship Counts
+
+Every `get_task` response includes `relationship_counts` as a compact summary:
+
+```json
+{
+  "relationship_counts": {
+    "subtasks": 3,
+    "blockers": 1,
+    "blocking": 2,
+    "duplicates": 0,
+    "related": 1,
+    "total": 7
+  }
+}
+```
+
+This lets agents check for dependencies without loading the full relationship arrays.

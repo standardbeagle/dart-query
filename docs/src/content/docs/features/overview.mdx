@@ -1,0 +1,169 @@
+---
+title: "Feature Overview: Context Window Optimization for Batch Task Management"
+description: How dart-query MCP server eliminates context rot with batch operations, DartQL selectors, and safety-first defaults. Concrete token comparisons and workflow examples.
+sidebar:
+  order: 0
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## The Context Rot Problem
+
+Every MCP tool call returns JSON that fills your context window. Traditional task management tools force a loop-per-task pattern that scales linearly with task count:
+
+| Operation | Loop Approach | dart-query |
+|-----------|--------------|------------|
+| Update 50 task statuses | 50 calls, ~30,000 tokens | 1 call, ~200 tokens |
+| Delete 20 completed tasks | 20 calls, ~10,000 tokens | 1 call, ~150 tokens |
+| Create 100 tasks from CSV | 100 calls, ~50,000 tokens | 1 call, ~500 tokens |
+
+After a 50-task loop, the agent has consumed so much context that subsequent reasoning degrades. dart-query eliminates this entirely with server-side batch execution.
+
+### Before: Loop-Based Updates
+
+```typescript
+// 50 API calls, ~30K tokens of intermediate JSON
+for (const task of tasks) {
+  update_task({ dart_id: task.id, status: "Done" })
+  // Each response: ~600 tokens of JSON
+  // Agent must parse, discard, repeat
+}
+```
+
+### After: Single Batch Call
+
+```typescript
+// 1 API call, ~200 tokens total
+execute_dartql({
+  query: "UPDATE WHERE dartboard = 'Sprint 12' AND status = 'Todo' SET status = 'Done'",
+  dry_run: false
+})
+// Response: { total_matched: 50, total_succeeded: 50 }
+```
+
+## Batch Task Management with DartQL
+
+DartQL uses SQL-92 WHERE clause syntax that any developer already knows. No proprietary query language to learn.
+
+```sql
+-- Target by dartboard and priority
+UPDATE WHERE dartboard = 'Engineering' AND priority = 'high'
+  SET status = 'Doing'
+
+-- Pattern matching with LIKE
+UPDATE WHERE title LIKE '%auth%' SET tags = ['security', 'auth']
+
+-- Range queries
+DELETE WHERE due_at < '2025-01-01' AND status = 'Done' CONFIRM
+
+-- Set operations
+UPDATE WHERE tags CONTAINS 'bug' AND priority IN ('critical', 'high')
+  SET assignee = 'oncall@company.com'
+```
+
+**Supported operators:** `=`, `!=`, `<>`, `>`, `>=`, `<`, `<=`, `LIKE`, `IN`, `NOT IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`, `CONTAINS`
+
+Multi-statement execution lets you chain operations in a single call:
+
+```typescript
+execute_dartql({
+  query: `
+    UPDATE WHERE dartboard = 'Sprint 11' AND status != 'Done' SET dartboard = 'Sprint 12';
+    UPDATE WHERE dartboard = 'Sprint 12' AND priority = 'critical' SET status = 'Doing'
+  `,
+  dry_run: true  // preview both operations first
+})
+```
+
+## Safety-First MCP Server Design
+
+Production task data demands careful defaults. dart-query builds safety into every destructive operation:
+
+<CardGrid>
+  <Card title="Dry-Run by Default" icon="warning">
+    All batch operations default to `dry_run: true`. You always preview before executing. No accidental bulk updates.
+  </Card>
+  <Card title="Delete Confirmation" icon="approve-check">
+    Batch deletes require an explicit `CONFIRM` keyword when `dry_run: false`. Two-step protection against accidental deletion.
+  </Card>
+  <Card title="Recoverable Trash" icon="backward">
+    Deleted tasks move to trash, not permanent deletion. Mistakes are recoverable from the Dart AI interface.
+  </Card>
+  <Card title="Validation Phase" icon="list-format">
+    CSV imports validate every row before creating anything. Catch typos, invalid assignees, and bad dates before they become tasks.
+  </Card>
+</CardGrid>
+
+### Dry-Run Workflow
+
+```typescript
+// Step 1: Preview what will change
+execute_dartql({
+  query: "UPDATE WHERE status = 'Blocked' SET priority = 'critical'",
+  dry_run: true
+})
+// Response shows matched tasks without modifying anything
+
+// Step 2: Execute after reviewing
+execute_dartql({
+  query: "UPDATE WHERE status = 'Blocked' SET priority = 'critical'",
+  dry_run: false
+})
+```
+
+## Progressive Discovery
+
+dart-query's `info` tool uses three detail levels with strict token budgets, so agents load only the documentation they need:
+
+| Level | What You Get | Token Cost |
+|-------|-------------|------------|
+| `overview` | All 7 tool groups in a sparse table | ~150 tokens |
+| `group` | Tools in one group with descriptions | ~200 tokens |
+| `tool` | Full schema, examples, and DartQL syntax | ~500 tokens |
+
+```typescript
+// Start broad
+info()
+// "7 tool groups: discovery, config, task-crud, task-query, task-batch, import, doc-crud"
+
+// Drill into what you need
+info({ level: "group", target: "task-batch" })
+// "3 tools: execute_dartql, batch_update_tasks, batch_delete_tasks"
+
+// Get full docs for one tool
+info({ level: "tool", target: "execute_dartql" })
+// Complete parameter schema, examples, DartQL reference
+```
+
+No wasted tokens loading documentation for tools you are not using.
+
+## Token Budget Per Response
+
+Every dart-query response is designed to stay compact:
+
+| Operation | Typical Response Size |
+|-----------|----------------------|
+| `info()` overview | ~150 tokens |
+| `get_config()` | ~400 tokens |
+| Single task CRUD | ~200-300 tokens |
+| Batch operation summary | ~400 tokens |
+| CSV import result | ~500 tokens |
+
+Batch operations return aggregate summaries (matched count, success count, failure count) rather than echoing back every modified task. This is the core of context window optimization: the server does the work, you get the result.
+
+## What's Next
+
+<CardGrid>
+  <Card title="CSV Import" icon="document">
+    [Bulk-create tasks from CSV with validation, column mapping, and error recovery.](/dart-query/features/csv-import/)
+  </Card>
+  <Card title="Relationships" icon="random">
+    [Manage subtasks, blockers, duplicates, and related tasks.](/dart-query/features/relationships/)
+  </Card>
+  <Card title="DartQL Syntax" icon="open-book">
+    [Full reference for selectors, operators, and wildcards.](/dart-query/dartql/syntax/)
+  </Card>
+  <Card title="Getting Started" icon="right-arrow">
+    [Install and run your first batch operation.](/dart-query/getting-started/installation/)
+  </Card>
+</CardGrid>

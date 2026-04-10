@@ -1,8 +1,119 @@
 ---
 title: CSV Import
-description: Import tasks from CSV files with automatic field mapping.
+description: Bulk-create tasks from CSV files with automatic field mapping, validation, and error recovery.
 sidebar:
   order: 1
 ---
 
-Content coming soon.
+## Batch Task Creation from CSV
+
+The `import_tasks_csv` tool creates hundreds of tasks from CSV data in a single call. A two-phase workflow validates every row before creating anything, so errors never become tasks.
+
+### Supported Input
+
+Provide CSV data in two ways:
+
+- **`csv_file_path`** - Path to a CSV file on disk
+- **`csv_data`** - Inline CSV string (first row is headers)
+
+### CSV Column Format
+
+**Required:** `title` (the only mandatory column)
+
+**Optional columns:**
+
+| Column | Accepted Names | Format |
+|--------|---------------|--------|
+| `title` | Title, Task Name, Task | Plain text |
+| `description` | Description, Desc | Plain text |
+| `status` | Status | Status name (e.g., "To Do", "Doing") |
+| `priority` | Priority, Pri | "critical", "high", "medium", "low" |
+| `size` | Size | "xs", "small", "medium", "large", "xl" |
+| `assignee` | Assigned To, Owner | Email address or name |
+| `tags` | Labels, Tags | Comma-separated values |
+| `due_at` | Due Date, due_date | ISO 8601 date |
+| `start_at` | Start Date, start_date | ISO 8601 date |
+| `dartboard` | Dartboard | Overrides default dartboard |
+| `parent_task` | Parent | Parent task dart_id |
+
+**Relationship columns** (comma-separated dart_id values):
+
+| Column | Accepted Names |
+|--------|---------------|
+| `subtask_ids` | subtasks, children |
+| `blocker_ids` | blockers, blocked_by |
+| `blocking_ids` | blocking, blocks |
+| `duplicate_ids` | duplicates |
+| `related_ids` | related, related_tasks |
+
+Column names are case-insensitive and fuzzy-matched, so exports from Jira, Linear, or spreadsheets work without manual renaming.
+
+## Two-Phase Validation Workflow
+
+### Phase 1: Validate
+
+```typescript
+import_tasks_csv({
+  csv_file_path: "./sprint-tasks.csv",
+  dartboard: "Engineering/backend",
+  validate_only: true
+})
+```
+
+The response includes:
+- **`valid_rows`** / **`invalid_rows`** - Counts
+- **`validation_errors`** - Row number and specific error for each invalid row
+- **`preview`** - First 10 rows showing exactly what will be created
+
+Fix any validation errors in the CSV before proceeding.
+
+### Phase 2: Execute
+
+```typescript
+import_tasks_csv({
+  csv_file_path: "./sprint-tasks.csv",
+  dartboard: "Engineering/backend",
+  validate_only: false
+})
+```
+
+The response includes `created_tasks`, `failed_tasks`, `created_dart_ids`, and details for any rows that failed.
+
+## Custom Column Mapping
+
+When CSV headers do not match dart-query field names, provide an explicit mapping:
+
+```typescript
+import_tasks_csv({
+  csv_file_path: "./jira_export.csv",
+  dartboard: "Engineering/backend",
+  column_mapping: {
+    "Summary": "title",
+    "Issue Type": "tags",
+    "Reporter": "assignee",
+    "Story Points": "size"
+  },
+  validate_only: true
+})
+```
+
+This makes dart-query compatible with exports from any project management tool.
+
+## Example CSV
+
+```csv
+title,description,assignee,priority,tags,due_at
+"Fix login bug","Users can't login after password reset",john@company.com,critical,"bug,security",2026-02-01T00:00:00Z
+"Update API docs","Document new auth endpoints",writer@company.com,medium,documentation,2026-02-15T00:00:00Z
+"Add rate limiting","Prevent API abuse",engineer@company.com,high,"feature,security",2026-02-10T00:00:00Z
+```
+
+## Error Recovery
+
+Set `continue_on_error: true` (the default) to create valid tasks even when some rows fail. The response lists every failed row with its error and original data, so you can fix and re-import only the failures.
+
+Control concurrency with the `concurrency` parameter (default: 5, range: 1-20) to balance speed against API rate limits.
+
+## Token Cost
+
+A CSV import of 100 tasks costs ~500 tokens for the response. The equivalent 100 individual `create_task` calls would cost ~30,000 tokens. The validation phase adds no extra token cost since it reuses the same response format.
