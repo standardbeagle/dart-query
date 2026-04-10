@@ -117,3 +117,9 @@ Control concurrency with the `concurrency` parameter (default: 5, range: 1-20) t
 ## Token Cost
 
 A CSV import of 100 tasks costs ~500 tokens for the response. The equivalent 100 individual `create_task` calls would cost ~30,000 tokens. The validation phase adds no extra token cost since it reuses the same response format.
+
+## See Also
+
+- [Import Tool Reference](/dart-query/tools/import/) -- full parameter schema and examples for `import_tasks_csv`
+- [Batch Operations](/dart-query/tools/batch-operations/) -- bulk-update existing tasks with DartQL
+- [DartQL Recipes](/dart-query/cookbook/recipes/) -- practical recipes for common workflows
