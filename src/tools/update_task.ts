@@ -371,40 +371,10 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // Step 10: Validate priority and size
   // ============================================================================
   if (updateFields.priority !== undefined) {
-    if (!config.priorities || config.priorities.length === 0) {
-      throw new ValidationError(
-        'No priorities found in workspace configuration. Cannot update priority.',
-        'priority'
-      );
-    }
-
-    if (typeof updateFields.priority !== 'number' || updateFields.priority < 1 || updateFields.priority > 5) {
-      throw new ValidationError(
-        `Invalid priority: ${updateFields.priority}. Valid range: 1-5 (1=lowest, 5=highest)`,
-        'priority',
-        ['1', '2', '3', '4', '5']
-      );
-    }
-
     resolvedUpdates.priority = updateFields.priority;
   }
 
   if (updateFields.size !== undefined) {
-    if (!config.sizes || config.sizes.length === 0) {
-      throw new ValidationError(
-        'No sizes found in workspace configuration. Cannot update size.',
-        'size'
-      );
-    }
-
-    if (typeof updateFields.size !== 'number' || updateFields.size < 1 || updateFields.size > 5) {
-      throw new ValidationError(
-        `Invalid size: ${updateFields.size}. Valid range: 1-5 (1=XS, 5=XL)`,
-        'size',
-        ['1', '2', '3', '4', '5']
-      );
-    }
-
     resolvedUpdates.size = updateFields.size;
   }
 
@@ -582,12 +552,14 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // Step 17: Add comment if provided (non-blocking — update already succeeded)
   // ============================================================================
   let commentAdded: boolean | undefined;
+  let commentError: string | undefined;
   if (comment) {
     try {
       await client.addComment(dart_id, comment.trim());
       commentAdded = true;
-    } catch {
+    } catch (err) {
       commentAdded = false;
+      commentError = err instanceof Error ? err.message : String(err);
     }
   }
 
@@ -602,5 +574,6 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     task: updatedTask,
     url: deepLinkUrl,
     ...(commentAdded !== undefined && { comment_added: commentAdded }),
+    ...(commentError !== undefined && { comment_error: commentError }),
   };
 }

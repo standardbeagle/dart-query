@@ -469,7 +469,17 @@ export class DartClient {
     if (!input.text || typeof input.text !== 'string') {
       throw new DartAPIError('text is required and must be a string', 400);
     }
-    return this.request<DartDoc>('POST', '/docs', input);
+    const response = await this.request<{ item: any }>('POST', '/docs', { item: input });
+    return {
+      doc_id: response.item?.id || '',
+      title: response.item?.title || input.title,
+      text: response.item?.text || input.text,
+      folder: response.item?.folder,
+      folder_id: response.item?.folder_id,
+      created_at: response.item?.created_at || '',
+      updated_at: response.item?.updated_at || '',
+      url: response.item?.url,
+    };
   }
 
   /**
@@ -633,7 +643,7 @@ export class DartClient {
     const response = await this.request<{ item: any }>(
       'POST',
       `/tasks/${encodeURIComponent(input.dart_id.trim())}/move`,
-      apiInput
+      { item: apiInput }
     );
     return this.mapTaskResponse(response.item);
   }
@@ -672,7 +682,7 @@ export class DartClient {
     const response = await this.request<{ item: any }>(
       'POST',
       `/tasks/${encodeURIComponent(input.dart_id.trim())}/time-tracking`,
-      apiInput
+      { item: apiInput }
     );
 
     return {
@@ -713,7 +723,7 @@ export class DartClient {
     const response = await this.request<{ item: any }>(
       'POST',
       `/tasks/${encodeURIComponent(input.dart_id.trim())}/attachments/from-url`,
-      apiInput
+      { item: apiInput }
     );
 
     return {

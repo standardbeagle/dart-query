@@ -1338,7 +1338,13 @@ function evaluateExpression(expr: DartQLExpression, task: unknown): boolean {
 
     if (!field) return false;
 
-    const taskValue = taskObj[field];
+    // Map DartQL field names to task object property names
+    const fieldAliases: Record<string, string> = {
+      'assignee': 'assignees',
+    };
+    const resolvedField = fieldAliases[field] || field;
+
+    const taskValue = taskObj[resolvedField];
 
     // Handle different operators
     switch (operator) {
