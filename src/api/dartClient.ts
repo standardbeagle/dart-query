@@ -684,13 +684,14 @@ export class DartClient {
 
     // Get current user from config for the required user field
     const config = await this.getConfig();
-    const currentUser = config.user || config.assignees?.[0];
-    if (!currentUser?.dart_id) {
+    const currentUser = config.user || config.assignees?.find(a => a.email);
+    const userId = currentUser?.dart_id || currentUser?.email || currentUser?.name;
+    if (!userId) {
       throw new DartAPIError('Cannot determine current user for time tracking. Check workspace config.', 400);
     }
 
     const apiInput: Record<string, unknown> = {
-      user: currentUser.dart_id,
+      user: userId,
       startedAt: input.started_at,
       finishedAt: finishedAt,
     };
