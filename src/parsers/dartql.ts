@@ -343,6 +343,11 @@ export class DartQLTokenizer {
       this.consume();
       return { type: TokenType.LESS_EQUAL, value: '<=', position: start, length: 2 };
     }
+    // SQL-92 <> alias for !=
+    if (first === '<' && second === '>') {
+      this.consume();
+      return { type: TokenType.NOT_EQUALS, value: '!=', position: start, length: 2 };
+    }
 
     // Single-character operators
     if (first === '=') {
@@ -385,6 +390,8 @@ export class DartQLTokenizer {
       'IN': TokenType.IN,
       'LIKE': TokenType.LIKE,
       'CONTAINS': TokenType.CONTAINS,
+      'INCLUDES': TokenType.CONTAINS,  // alias
+      'HAS': TokenType.CONTAINS,       // alias
       'IS': TokenType.IS,
       'NULL': TokenType.NULL,
       'BETWEEN': TokenType.BETWEEN,
@@ -478,6 +485,28 @@ export class DartQLLexer {
   private validateFieldName(token: Token): void {
     const fieldName = token.value.toLowerCase();
     this.fields.add(fieldName);
+
+    // Check if this looks like an operator used as a field name (common LLM mistake)
+    const operatorHints: Record<string, string> = {
+      'starts_with': "Use LIKE 'value%' for prefix matching",
+      'startswith': "Use LIKE 'value%' for prefix matching",
+      'ends_with': "Use LIKE '%value' for suffix matching",
+      'endswith': "Use LIKE '%value' for suffix matching",
+      'matches': "Use LIKE '%value%' for pattern matching",
+      'ilike': "Use LIKE (case-insensitive by default)",
+      'regex': "Use LIKE with % and _ wildcards",
+      'regexp': "Use LIKE with % and _ wildcards",
+      'equal': "Use = operator",
+      'equals': "Use = operator",
+      'not_equal': "Use != or <> operator",
+    };
+    const hint = operatorHints[fieldName];
+    if (hint) {
+      this.errors.push(
+        `'${token.value}' is not a valid operator. DartQL uses SQL-92 syntax — ${hint} (at position ${token.position})`
+      );
+      return;
+    }
 
     // Check if field name is valid
     if (!VALID_FIELDS.includes(fieldName as ValidField)) {
@@ -849,8 +878,23 @@ export class DartQLParser {
 
     const operator = operatorMap[token.type];
     if (!operator) {
-      this.addError(`Expected comparison operator, got '${token.value}' at position ${token.position}`);
-      throw new DartQLParseError(`Expected comparison operator`, token.position, token.value);
+      // Suggest LIKE for common string-matching attempts
+      const likeHints: Record<string, string> = {
+        'starts_with': "LIKE 'value%'",
+        'startswith': "LIKE 'value%'",
+        'ends_with': "LIKE '%value'",
+        'endswith': "LIKE '%value'",
+        'matches': "LIKE '%value%'",
+        'ilike': "LIKE (case-insensitive by default)",
+        'regex': "LIKE with % and _ wildcards",
+        'regexp': "LIKE with % and _ wildcards",
+      };
+      const hint = likeHints[token.value.toLowerCase()];
+      const msg = hint
+        ? `'${token.value}' is not a valid operator. DartQL uses SQL-92 syntax — use ${hint}`
+        : `Expected operator (=, !=, <>, <, >, <=, >=, LIKE, CONTAINS, IN, NOT IN, BETWEEN, IS NULL), got '${token.value}'`;
+      this.addError(msg);
+      throw new DartQLParseError(msg, token.position, token.value);
     }
 
     this.consume();
@@ -1040,6 +1084,11 @@ export function convertToFilters(ast: DartQLExpression): ConvertToFiltersResult 
       // Need client-side filtering
       result.requiresClientSide = true;
       result.clientFilter = buildClientSideFilter(ast);
+
+      // Hybrid: extract API-compatible parts to narrow the fetch even when
+      // some conditions require client-side evaluation (e.g. dartboard = 'X' AND title LIKE 'Y%')
+      result.apiFilters = extractAPIFiltersPartial(ast);
+
       result.warnings.push(
         'Query requires client-side filtering which may impact performance. ' +
         'Consider using simpler queries with API-supported filters for better performance.'
@@ -1226,6 +1275,37 @@ function extractAPIFilters(expr: DartQLExpression): Partial<ListTasksInput> {
     if (expr.expressions && expr.expressions.length > 0) {
       return extractAPIFilters(expr.expressions[0]);
     }
+  }
+
+  return filters;
+}
+
+/**
+ * Extract API-compatible filters from AND expressions, skipping non-API parts.
+ * Used for hybrid filtering: narrow the API fetch even when some conditions
+ * must be evaluated client-side.
+ */
+function extractAPIFiltersPartial(expr: DartQLExpression): Partial<ListTasksInput> {
+  const filters: Partial<ListTasksInput> = {};
+
+  if (expr.type === 'comparison') {
+    // Only extract if this specific comparison is API-compatible
+    const reasons: string[] = [];
+    if (isAPICompatible(expr, reasons)) {
+      return extractAPIFilters(expr);
+    }
+    return filters;
+  }
+
+  if (expr.type === 'logical' && expr.operator === 'AND') {
+    // Extract from both sides independently - skip non-API parts
+    const leftFilters = expr.left ? extractAPIFiltersPartial(expr.left) : {};
+    const rightFilters = expr.right ? extractAPIFiltersPartial(expr.right) : {};
+    Object.assign(filters, leftFilters, rightFilters);
+  }
+
+  if (expr.type === 'group' && expr.expressions && expr.expressions.length > 0) {
+    return extractAPIFiltersPartial(expr.expressions[0]);
   }
 
   return filters;

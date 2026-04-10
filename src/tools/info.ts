@@ -331,14 +331,18 @@ Output Schema:
   failed_items: Array<{dart_id, error, reason}>
   execution_time_ms: integer
 
-DartQL Syntax Guide:
-  Operators: =, !=, >, >=, <, <=, IN, NOT IN, LIKE, CONTAINS
+DartQL Syntax Guide (SQL-92 WHERE clause syntax):
+  Operators: =, !=, <>, >, >=, <, <=, IN, NOT IN, LIKE, CONTAINS, IS NULL, IS NOT NULL, BETWEEN
   Logical: AND, OR, NOT
   Grouping: Use parentheses for precedence
+  Aliases: INCLUDES/HAS → CONTAINS
+  LIKE wildcards: % = any chars, _ = single char (case-insensitive)
 
   Examples:
     "status = 'Todo'"
     "priority >= 3 AND assignee = 'duid_user1'"
+    "title LIKE 'Task%'"                           -- starts with
+    "title LIKE '%bug%'"                            -- contains substring
     "tags CONTAINS 'urgent' AND due_at < '2026-02-01'"
     "(status = 'Todo' OR status = 'In Progress') AND NOT (priority = 1)"
 

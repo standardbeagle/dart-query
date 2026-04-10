@@ -501,7 +501,7 @@ class DartQueryServer {
             properties: {
               selector: {
                 type: 'string',
-                description: 'DartQL WHERE clause to select tasks (e.g., "status = \'Todo\' AND priority >= 3")',
+                description: 'DartQL WHERE clause (SQL-92 syntax). Operators: =, !=, <>, <, >, <=, >=, LIKE, IN, NOT IN, BETWEEN, IS NULL, CONTAINS. Use LIKE with % and _ wildcards for pattern matching (e.g., "title LIKE \'Task%\'")',
               },
               updates: {
                 type: 'object',
@@ -565,7 +565,7 @@ class DartQueryServer {
             properties: {
               selector: {
                 type: 'string',
-                description: 'DartQL WHERE clause to select tasks (e.g., "status = \'Archived\' AND completed_at < \'2025-01-01\'")',
+                description: 'DartQL WHERE clause (SQL-92 syntax). Operators: =, !=, <>, <, >, <=, >=, LIKE, IN, NOT IN, BETWEEN, IS NULL, CONTAINS. Use LIKE with % and _ wildcards for pattern matching.',
               },
               dry_run: {
                 type: 'boolean',
@@ -591,7 +591,7 @@ class DartQueryServer {
             properties: {
               query: {
                 type: 'string',
-                description: "DartQL statement(s). Examples: UPDATE WHERE status = 'Todo' SET status = 'Done'; DELETE WHERE status = 'Archived' CONFIRM",
+                description: "DartQL statement(s) using SQL-92 WHERE syntax. Operators: =, !=, <>, LIKE '%pattern%', IN, BETWEEN, IS NULL, CONTAINS. Examples: UPDATE WHERE status = 'Todo' SET status = 'Done'; UPDATE WHERE title LIKE 'Task%' SET status = 'Done'",
               },
               dry_run: {
                 type: 'boolean',

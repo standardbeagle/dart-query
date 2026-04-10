@@ -96,6 +96,20 @@ describe('DartQLTokenizer', () => {
       expect(tokens[5]).toMatchObject({ type: TokenType.CONTAINS, value: 'CONTAINS' });
     });
 
+    it('should tokenize INCLUDES and HAS as CONTAINS aliases', () => {
+      const t1 = new DartQLTokenizer("tags INCLUDES 'urgent'");
+      expect(t1.tokenize()[1]).toMatchObject({ type: TokenType.CONTAINS });
+
+      const t2 = new DartQLTokenizer("tags HAS 'urgent'");
+      expect(t2.tokenize()[1]).toMatchObject({ type: TokenType.CONTAINS });
+    });
+
+    it('should tokenize <> as NOT_EQUALS', () => {
+      const tokenizer = new DartQLTokenizer("status <> 'Done'");
+      const tokens = tokenizer.tokenize();
+      expect(tokens[1]).toMatchObject({ type: TokenType.NOT_EQUALS, value: '!=' });
+    });
+
     it('should tokenize IS NULL', () => {
       const tokenizer = new DartQLTokenizer('due_at IS NULL');
       const tokens = tokenizer.tokenize();
@@ -884,7 +898,13 @@ describe('DartQLParser (AST Builder)', () => {
       const result = parseDartQLToAST('status "Todo"');
 
       expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('Expected comparison operator');
+      expect(result.errors[0]).toContain('Expected operator');
+    });
+
+    it('should suggest LIKE for starts_with', () => {
+      const result = parseDartQLToAST("title starts_with 'Task'");
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors.some(e => e.includes('LIKE'))).toBe(true);
     });
 
     it('should report error for missing value', () => {
@@ -1709,12 +1729,27 @@ describe('convertToFilters', () => {
     });
 
     it('should handle mixed AND with API and client-side filters', () => {
-      // status = "Todo" is API-compatible, status != "Done" is not
+      // status = "Todo" is API-compatible, priority >= is not
       const ast = parseDartQLToAST('status = "Todo" AND priority >= 3').ast;
       const result = convertToFilters(ast);
 
       // priority >= requires client-side
       expect(result.requiresClientSide).toBe(true);
+      // Hybrid: API-compatible part should still be extracted
+      expect(result.apiFilters).toEqual({ status: 'Todo' });
+    });
+
+    it('should extract dartboard filter when combined with LIKE (hybrid)', () => {
+      const ast = parseDartQLToAST("dartboard = 'Personal/space' AND title LIKE 'Task%'").ast;
+      const result = convertToFilters(ast);
+
+      expect(result.requiresClientSide).toBe(true);
+      // Dartboard should be extracted as API filter to narrow the fetch
+      expect(result.apiFilters).toEqual({ dartboard: 'Personal/space' });
+      expect(result.clientFilter).toBeDefined();
+      // Client filter should still evaluate the full expression
+      expect(result.clientFilter!({ dartboard: 'Personal/space', title: 'Task 1' })).toBe(true);
+      expect(result.clientFilter!({ dartboard: 'Personal/space', title: 'Other' })).toBe(false);
     });
 
     it('should handle empty BETWEEN array edge case', () => {

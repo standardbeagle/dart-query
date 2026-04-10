@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-04-09
+
+### Fixed
+- **Hybrid DartQL filtering** — batch operations with mixed API/client-side conditions (e.g., `dartboard = 'X' AND title LIKE 'Y%'`) now extract API-compatible filters to narrow the fetch, preventing 500 errors from unbounded queries
+- **HTML error responses** — Dart API errors that return HTML pages now show a clean message (e.g., "Server returned HTML error page: Dart") instead of raw markup
+
+### Added
+- **SQL-92 `<>` operator** — alias for `!=` (not equals)
+- **`INCLUDES`/`HAS` aliases** — alternative keywords for `CONTAINS`
+- **Operator hint errors** — common non-SQL operators (`starts_with`, `endswith`, `matches`, `regex`, etc.) now produce targeted error messages suggesting the correct LIKE syntax
+- Updated all tool schema descriptions and documentation to reference SQL-92 syntax with full operator list and LIKE wildcard examples
+
 ## [0.10.2] - 2026-04-07
 
 ### Added

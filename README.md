@@ -77,13 +77,18 @@ See **[TOOLS.md](./TOOLS.md)** for full parameter references, DartQL syntax, and
 
 ## DartQL Selectors
 
-SQL-like WHERE clauses for targeting tasks in batch operations:
+SQL-92 WHERE clause syntax for targeting tasks in batch operations:
 
 ```sql
 dartboard = 'Engineering' AND priority = 'high' AND tags CONTAINS 'bug'
-due_at < '2026-01-18' AND status != 'Done'
-title LIKE '%auth%'
+due_at < '2026-01-18' AND status <> 'Done'
+title LIKE 'Task%'                          -- starts with
+title LIKE '%auth%'                         -- contains substring
 ```
+
+**Operators:** `=`, `!=`, `<>`, `>`, `>=`, `<`, `<=`, `LIKE`, `IN`, `NOT IN`, `BETWEEN`, `IS NULL`, `IS NOT NULL`, `CONTAINS`
+**Aliases:** `INCLUDES`/`HAS` → `CONTAINS` · `<>` → `!=`
+**LIKE wildcards:** `%` = any characters, `_` = single character (case-insensitive)
 
 ## Safety
 

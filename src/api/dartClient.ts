@@ -213,8 +213,14 @@ export class DartClient {
               errorDetail = fields.join('; ');
             }
           }
+        } else if (text.trimStart().startsWith('<')) {
+          // HTML error page — extract just the status, not the markup
+          const titleMatch = text.match(/<title[^>]*>([^<]+)<\/title>/i);
+          errorDetail = titleMatch
+            ? `Server returned HTML error page: ${titleMatch[1].trim()}`
+            : 'Server returned HTML instead of JSON (likely a server error or redirect)';
         } else {
-          // Non-JSON response body (plain text error)
+          // Plain text error
           errorDetail = text.slice(0, 500);
         }
       }

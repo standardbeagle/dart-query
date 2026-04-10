@@ -1204,7 +1204,7 @@ dart-query includes full document (notes/docs) management. Documents are separat
 
 ## DartQL Reference
 
-**DartQL** is a SQL-like WHERE clause syntax for batch operations.
+**DartQL** uses SQL-92 WHERE clause syntax for batch operations.
 
 ### Syntax Overview
 
@@ -1217,15 +1217,15 @@ field operator value [AND|OR field operator value ...]
 | Operator | Description | Example |
 |----------|-------------|---------|
 | `=` | Equals | `status = 'To Do'` |
-| `!=` | Not equals | `priority != 'low'` |
+| `!=` / `<>` | Not equals | `priority != 'low'` |
 | `>` | Greater than | `due_at > '2026-02-01'` |
 | `>=` | Greater or equal | `priority >= 'high'` |
 | `<` | Less than | `due_at < '2026-01-18'` |
 | `<=` | Less or equal | `priority <= 'medium'` |
 | `IN` | In list | `status IN ('To Do', 'Doing')` |
 | `NOT IN` | Not in list | `priority NOT IN ('low')` |
-| `LIKE` | Pattern match | `title LIKE '%authentication%'` |
-| `CONTAINS` | Array contains | `tags CONTAINS 'urgent'` |
+| `LIKE` | Pattern match (`%` = any chars, `_` = single char, case-insensitive) | `title LIKE 'Task%'` |
+| `CONTAINS` | Array contains (aliases: `INCLUDES`, `HAS`) | `tags CONTAINS 'urgent'` |
 | `IS NULL` | Is null/undefined | `due_at IS NULL` |
 | `IS NOT NULL` | Is not null | `assignees IS NOT NULL` |
 | `BETWEEN` | Range | `created_at BETWEEN '2026-01-01' AND '2026-01-31'` |
@@ -1304,10 +1304,12 @@ tags CONTAINS 'urgent'
 tags CONTAINS 'bug' AND tags CONTAINS 'security'
 ```
 
-**Pattern matching:**
+**Pattern matching (LIKE with SQL-92 wildcards):**
 ```sql
-title LIKE '%authentication%'
-description LIKE '%API%'
+title LIKE 'Task%'              -- starts with "Task"
+title LIKE '%authentication%'   -- contains "authentication"
+title LIKE '%fix'               -- ends with "fix"
+description LIKE 'API_%'        -- starts with "API_" (underscore = single char)
 ```
 
 **NULL checks:**
@@ -2041,7 +2043,8 @@ Unknown field: priorty. Did you mean: priority?
 1. Check field name spelling (fuzzy match suggestions provided)
 2. Valid fields: status, priority, size, title, description, assignee, dartboard, tags, dates, dart_id
 3. Use quotes for string values: `status = 'To Do'` not `status = To Do`
-4. Check operator syntax: `=`, `!=`, `>`, `>=`, `<`, `<=`, `IN`, `NOT IN`, `LIKE`, `CONTAINS`
+4. Check operator syntax (SQL-92): `=`, `!=`/`<>`, `>`, `>=`, `<`, `<=`, `IN`, `NOT IN`, `LIKE`, `CONTAINS`/`INCLUDES`/`HAS`, `IS NULL`, `BETWEEN`
+5. For pattern matching use `LIKE` with `%` and `_` wildcards (not `starts_with`, `matches`, etc.)
 
 ### Problem: Batch Operations Matching Wrong Tasks
 
