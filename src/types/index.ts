@@ -170,8 +170,8 @@ export function getTagNames(tags: (DartTag | string)[]): string[] {
 }
 
 /** Extract names from folders array for fuzzy matching */
-export function getFolderNames(folders: DartFolder[]): string[] {
-  return folders.map(f => f.name);
+export function getFolderNames(folders: (DartFolder | string)[]): string[] {
+  return folders.map(f => typeof f === 'string' ? f : f.name);
 }
 
 /** Extract labels from priorities array for fuzzy matching */
@@ -250,11 +250,16 @@ export function getTagId(tag: DartTag | string): string {
 }
 
 /** Find folder by name or dart_id (case-insensitive) */
-export function findFolder(folders: DartFolder[], input: string): DartFolder | undefined {
+export function findFolder(folders: (DartFolder | string)[], input: string): DartFolder | undefined {
   const normalized = input.toLowerCase().trim();
-  return folders.find(
-    f => f.name?.toLowerCase() === normalized || f.dart_id?.toLowerCase() === normalized
-  );
+  for (const f of folders) {
+    if (typeof f === 'string') {
+      if (f.toLowerCase() === normalized) return { dart_id: f, name: f };
+    } else {
+      if (f.name?.toLowerCase() === normalized || f.dart_id?.toLowerCase() === normalized) return f;
+    }
+  }
+  return undefined;
 }
 
 // ============================================================================

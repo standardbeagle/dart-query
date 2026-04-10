@@ -672,11 +672,28 @@ export class DartClient {
       throw new DartAPIError('started_at is required and must be an ISO8601 string', 400);
     }
 
+    // Compute finishedAt from duration if not provided
+    let finishedAt = input.finished_at;
+    if (!finishedAt && input.duration_minutes) {
+      const start = new Date(input.started_at);
+      finishedAt = new Date(start.getTime() + input.duration_minutes * 60000).toISOString();
+    }
+    if (!finishedAt) {
+      throw new DartAPIError('Either finished_at or duration_minutes is required', 400);
+    }
+
+    // Get current user from config for the required user field
+    const config = await this.getConfig();
+    const currentUser = config.user || config.assignees?.[0];
+    if (!currentUser?.dart_id) {
+      throw new DartAPIError('Cannot determine current user for time tracking. Check workspace config.', 400);
+    }
+
     const apiInput: Record<string, unknown> = {
+      user: currentUser.dart_id,
       startedAt: input.started_at,
+      finishedAt: finishedAt,
     };
-    if (input.finished_at !== undefined) apiInput.finishedAt = input.finished_at;
-    if (input.duration_minutes !== undefined) apiInput.durationMinutes = input.duration_minutes;
     if (input.note !== undefined) apiInput.note = input.note;
 
     const response = await this.request<{ item: any }>(
