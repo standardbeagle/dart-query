@@ -700,7 +700,7 @@ export class DartClient {
     const response = await this.request<{ item: any }>(
       'POST',
       `/tasks/${encodeURIComponent(input.dart_id.trim())}/time-tracking`,
-      { item: apiInput }
+      apiInput
     );
 
     return {
