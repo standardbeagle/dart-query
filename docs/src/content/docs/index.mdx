@@ -1,12 +1,12 @@
 ---
-title: dart-query
-description: MCP server for Dart AI task management with batch operations, DartQL selectors, and CSV import.
+title: "dart-query: Zero Context Rot Task Management"
+description: MCP server for Dart AI with batch operations, DartQL selectors, and CSV import. Update hundreds of tasks in a single call using ~200 tokens instead of ~30K.
 template: splash
 hero:
-  tagline: A Model Context Protocol server for managing Dart AI projects from any MCP-compatible client.
+  tagline: "Update hundreds of Dart AI tasks in a single MCP call. Zero context rot. ~200 tokens instead of ~30K."
   actions:
     - text: Get Started
-      link: /dart-query/tools/task-management/
+      link: /dart-query/getting-started/installation/
       icon: right-arrow
     - text: View on GitHub
       link: https://github.com/standardbeagle/dart-query
@@ -16,17 +16,53 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
+## Why dart-query?
+
+Traditional MCP task tools loop through tasks one-by-one, filling your context window with intermediate JSON. A 50-task status update consumes ~30,000 tokens and degrades every subsequent response.
+
+dart-query uses **DartQL selectors** and **server-side batch operations** to do the same update in a single call for ~200 tokens. Your context stays clean. Your agent stays sharp.
+
+## Key Features
+
 <CardGrid>
-  <Card title="Task Management" icon="pencil">
-    Create, update, and query tasks with a rich set of MCP tools.
+  <Card title="DartQL Selectors" icon="magnifier">
+    SQL-92 WHERE clause syntax for targeting tasks. Filter by dartboard, status, priority, tags, dates, and more with operators like `LIKE`, `IN`, `BETWEEN`, and `CONTAINS`.
   </Card>
   <Card title="Batch Operations" icon="list-format">
-    Update multiple tasks at once using DartQL selectors.
-  </Card>
-  <Card title="DartQL Selectors" icon="magnifier">
-    SQL-like query language for filtering and selecting tasks.
+    Update or delete hundreds of tasks in a single call. No loops, no intermediate JSON, no context window bloat.
   </Card>
   <Card title="CSV Import" icon="document">
-    Import tasks from CSV files with automatic field mapping.
+    Bulk-create tasks from CSV files with automatic field mapping and a validation phase that catches errors before creating anything.
+  </Card>
+  <Card title="Dry-Run Safety" icon="warning">
+    Preview every batch operation before executing. All batch updates and deletes support `dry_run: true` so you see exactly what will change.
+  </Card>
+  <Card title="Progressive Discovery" icon="rocket">
+    Start with `info()` to see available tools and workspace structure. Use `get_config()` to discover dartboards, statuses, and priorities. No guessing.
+  </Card>
+  <Card title="Full Task Lifecycle" icon="pencil">
+    Create, read, update, delete, comment, search, and manage relationships. Single-task precision when you need it, batch power when you don't.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```typescript
+// Find and update all high-priority Engineering bugs to "Doing"
+batch_update_tasks({
+  selector: "dartboard = 'Engineering' AND priority = 'high' AND tags CONTAINS 'bug'",
+  updates: { status: "Doing" },
+  dry_run: true   // preview first
+})
+```
+
+One call. ~200 tokens. Zero context rot.
+
+<CardGrid>
+  <Card title="Getting Started" icon="right-arrow">
+    [Install dart-query and run your first batch operation in under 5 minutes.](/dart-query/getting-started/installation/)
+  </Card>
+  <Card title="DartQL Reference" icon="open-book">
+    [Full syntax guide for selectors, operators, and wildcards.](/dart-query/dartql/syntax/)
   </Card>
 </CardGrid>

@@ -525,13 +525,46 @@ export class DartClient {
     if (!text || typeof text !== 'string' || text.trim() === '') {
       throw new DartAPIError('text is required and must be a non-empty string', 400);
     }
-    return this.request<{
+
+    type CommentResponse = {
       comment_id: string;
       dart_id: string;
       text: string;
       author: { dart_id: string; name: string };
       created_at: string;
-    }>('POST', `/tasks/${encodeURIComponent(dartId.trim())}/comments`, { text });
+    };
+
+    const trimmedId = dartId.trim();
+    const endpoint = `/tasks/${encodeURIComponent(trimmedId)}/comments`;
+    const retryDelays = [500, 1000, 2000];
+
+    for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+      try {
+        return await this.request<CommentResponse>('POST', endpoint, { text });
+      } catch (error) {
+        const is404 = error instanceof DartAPIError && error.statusCode === 404;
+        const hasRetriesLeft = attempt < retryDelays.length;
+
+        if (is404 && hasRetriesLeft) {
+          await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+          continue;
+        }
+
+        if (is404) {
+          throw new DartAPIError(
+            `Task '${trimmedId}' not found after ${retryDelays.length} retries. ` +
+            'Newly created tasks may not be immediately available. ' +
+            'Use the "comment" parameter on create_task or update_task instead.',
+            404
+          );
+        }
+
+        throw error;
+      }
+    }
+
+    // Unreachable, but satisfies TypeScript
+    throw new DartAPIError('Unexpected error in addComment retry loop', 500);
   }
 
   /**

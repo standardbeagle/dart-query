@@ -1,8 +1,116 @@
 ---
-title: Installation
-description: How to install and configure dart-query MCP server.
+title: "Installation and Setup"
+description: Install the dart-query MCP server, configure your Dart AI token, and run your first batch operation in under 5 minutes.
 sidebar:
   order: 1
 ---
 
-Content coming soon.
+## Prerequisites
+
+- **Node.js 18+** (for npx or global install)
+- A **Dart AI** account at [dartai.com](https://dartai.com)
+- An MCP-compatible client (Claude Desktop, Claude Code, Cursor, or any MCP host)
+
+## Step 1: Get Your Dart AI Token
+
+1. Go to [Dart AI Settings](https://app.dartai.com/?settings=account)
+2. Copy your API token (starts with `dsa_`)
+3. Keep it handy for the next step
+
+## Step 2: Install dart-query
+
+Choose one of three methods depending on your setup.
+
+### Option A: npx (Recommended)
+
+No global install needed. Add this to your MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "dart-query": {
+      "command": "npx",
+      "args": ["-y", "@standardbeagle/dart-query"],
+      "env": {
+        "DART_TOKEN": "dsa_your_token_here"
+      }
+    }
+  }
+}
+```
+
+**Where to put this file:**
+- **Claude Desktop:** `~/.config/claude/claude_desktop_config.json` (Linux/Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+- **Claude Code:** `~/.claude/mcp.json` or project-level `.mcp.json`
+- **Cursor:** Settings > MCP Servers
+
+### Option B: Global npm Install
+
+```bash
+npm install -g @standardbeagle/dart-query
+```
+
+Then configure your MCP client to use the `dart-query` command directly:
+
+```json
+{
+  "mcpServers": {
+    "dart-query": {
+      "command": "dart-query",
+      "env": {
+        "DART_TOKEN": "dsa_your_token_here"
+      }
+    }
+  }
+}
+```
+
+### Option C: SLOP-MCP Registration
+
+If you use [slop-mcp](https://github.com/standardbeagle/slop-mcp) to manage your MCP servers:
+
+```bash
+slop register dart-query \
+  --command npx \
+  --args "-y" "@standardbeagle/dart-query" \
+  --env DART_TOKEN=dsa_your_token_here \
+  --scope user
+```
+
+## Step 3: Verify the Connection
+
+After configuring your MCP client, restart it and run:
+
+```
+info({ level: "overview" })
+```
+
+You should see a summary of your Dart AI workspace including available dartboards, statuses, and tool categories.
+
+## Step 4: Run Your First Batch Operation
+
+Try a dry-run batch update to see dart-query in action without changing anything:
+
+```typescript
+// Preview: find all high-priority tasks on a dartboard
+batch_update_tasks({
+  selector: "dartboard = 'My Project' AND priority = 'high'",
+  updates: { status: "Doing" },
+  dry_run: true
+})
+```
+
+The response shows exactly which tasks would be affected and what would change. When you are ready, set `dry_run: false` to execute.
+
+## Environment Variable Reference
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DART_TOKEN` | Yes | Your Dart AI API token (starts with `dsa_`) |
+
+## Next Steps
+
+- [DartQL Syntax](/dart-query/dartql/syntax/) -- learn the full selector language
+- [Batch Operations](/dart-query/tools/batch-operations/) -- update and delete tasks in bulk
+- [CSV Import](/dart-query/features/csv-import/) -- bulk-create tasks from spreadsheets
+- [Task Management](/dart-query/tools/task-management/) -- single-task CRUD operations
