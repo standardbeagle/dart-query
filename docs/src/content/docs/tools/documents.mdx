@@ -1,0 +1,175 @@
+---
+title: Document Tools
+description: Tools for creating, reading, updating, deleting, and listing Dart documents.
+sidebar:
+  order: 4
+---
+
+## list_docs
+
+List documents with optional filtering by folder, title, or text content.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `folder` | `string` | No | Filter by folder (dart_id or name) |
+| `title_contains` | `string` | No | Filter by title substring (case-insensitive) |
+| `text_contains` | `string` | No | Filter by text content substring (case-insensitive) |
+| `limit` | `integer` | No | Max docs to return (default: 50, max: 500) |
+| `offset` | `integer` | No | Pagination offset (default: 0) |
+
+### Response
+
+Returns an array of document objects with `doc_id`, `title`, `folder`, and metadata. Text content is not included in list results -- use `get_doc` for full content.
+
+### Examples
+
+**List all documents:**
+
+```typescript
+list_docs()
+```
+
+**Find documents in a folder matching a keyword:**
+
+```typescript
+list_docs({
+  folder: "Engineering",
+  title_contains: "architecture"
+})
+```
+
+**Search document content:**
+
+```typescript
+list_docs({
+  text_contains: "deployment process",
+  limit: 10
+})
+```
+
+---
+
+## create_doc
+
+Create a new document with markdown content.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `title` | `string` | Yes | Document title |
+| `text` | `string` | Yes | Document text content (markdown supported) |
+| `folder` | `string` | No | Folder dart_id or name |
+
+### Response
+
+Returns the created document with `doc_id`, `title`, and `folder`.
+
+### Examples
+
+**Create a simple document:**
+
+```typescript
+create_doc({
+  title: "Sprint Retrospective",
+  text: "## What went well\n\n- Shipped feature X on time\n\n## What to improve\n\n- Better test coverage"
+})
+```
+
+**Create a document in a folder:**
+
+```typescript
+create_doc({
+  title: "API Design Guide",
+  text: "# API Design Guide\n\nAll endpoints must follow REST conventions...",
+  folder: "Engineering"
+})
+```
+
+---
+
+## get_doc
+
+Retrieve a document by its doc_id with full text content.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `doc_id` | `string` | Yes | Document doc_id |
+
+### Response
+
+Returns the full document object including `doc_id`, `title`, `text`, `folder`, `created_at`, and `updated_at`.
+
+### Examples
+
+```typescript
+get_doc({ doc_id: "duid_doc123" })
+```
+
+---
+
+## update_doc
+
+Update a document's title, text, or folder. Only sends changed fields.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `doc_id` | `string` | Yes | Document doc_id |
+| `updates` | `object` | Yes | Fields to update |
+| `updates.title` | `string` | No | New title |
+| `updates.text` | `string` | No | New text content (markdown) |
+| `updates.folder` | `string` | No | New folder (dart_id or name) |
+
+### Response
+
+Returns the updated document object.
+
+### Examples
+
+**Update document content:**
+
+```typescript
+update_doc({
+  doc_id: "duid_doc123",
+  updates: {
+    text: "# Updated Guide\n\nNew content with latest standards."
+  }
+})
+```
+
+**Move document to a different folder:**
+
+```typescript
+update_doc({
+  doc_id: "duid_doc123",
+  updates: { folder: "Archive" }
+})
+```
+
+---
+
+## delete_doc
+
+Move a document to trash. Recoverable from the Dart web UI.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `doc_id` | `string` | Yes | Document doc_id |
+
+### Response
+
+Returns confirmation with the deleted document's `doc_id` and `title`.
+
+### Examples
+
+```typescript
+delete_doc({ doc_id: "duid_doc123" })
+```

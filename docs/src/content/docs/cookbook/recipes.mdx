@@ -1,8 +1,267 @@
 ---
-title: Common Recipes
-description: Practical examples for common dart-query workflows.
+title: "DartQL Recipes"
+description: Copy-paste DartQL recipes for bulk task updates, batch task management, sprint planning, cleanup, and AI project management automation.
 sidebar:
   order: 1
 ---
 
-Content coming soon.
+Practical DartQL recipes you can copy, adapt, and run. Each recipe uses `execute_dartql`, the preferred tool for batch operations. Always start with `dry_run: true` (the default) to preview before executing.
+
+## Sprint Management
+
+### How to Bulk Update Task Status
+
+Move all in-progress tasks to done at the end of a sprint:
+
+```sql
+UPDATE WHERE dartboard = 'Engineering/sprint-12' AND status = 'Doing'
+  SET status = 'Done'
+  COMMENT 'Sprint 12 closed: {title}'
+```
+
+**Tip:** The `{title}` template variable inserts each task's title into the comment automatically.
+
+### Bulk-Assign Tasks to a Team Member
+
+Assign all unassigned high-priority backend tasks to a specific engineer:
+
+```sql
+UPDATE WHERE dartboard = 'Engineering/backend'
+  AND priority = 'high'
+  AND assignee IS NULL
+  SET assignees = ['engineer@company.com']
+```
+
+### Set Sprint Deadlines in Batch
+
+Apply a due date to all tasks in the current sprint that don't have one:
+
+```sql
+UPDATE WHERE dartboard = 'Engineering/sprint-13'
+  AND due_at IS NULL
+  SET due_at = '2026-02-14T00:00:00Z'
+```
+
+### Reprioritize Overdue Tasks
+
+Escalate overdue tasks that are still open:
+
+```sql
+UPDATE WHERE due_at < '2026-04-09T00:00:00Z'
+  AND status != 'Done'
+  AND priority = 'high'
+  SET priority = 'critical'
+  COMMENT 'Auto-escalated: overdue'
+```
+
+## Cleanup and Archival
+
+### Archive Completed Tasks by Quarter
+
+Move all tasks completed in Q1 to an archive dartboard:
+
+```sql
+UPDATE WHERE completed_at >= '2026-01-01T00:00:00Z'
+  AND completed_at < '2026-04-01T00:00:00Z'
+  SET dartboard = 'Archive/2026-Q1'
+```
+
+**Tip:** Use `concurrency: 10` for large batches to speed up execution.
+
+### Delete Stale Low-Priority Tasks
+
+Remove tasks that haven't been updated in months and are still in the backlog:
+
+```sql
+DELETE WHERE priority = 'low'
+  AND updated_at < '2025-10-01T00:00:00Z'
+  AND status = 'To Do'
+  CONFIRM
+```
+
+**Safety:** The `CONFIRM` keyword is required for DELETE statements when `dry_run` is false. Without it, the statement is rejected.
+
+### Find and Remove Duplicate Tasks
+
+Find tasks marked as duplicates and delete them:
+
+```sql
+DELETE WHERE duplicate_ids IS NOT NULL CONFIRM
+```
+
+### Multi-Statement Cleanup
+
+Archive done tasks and delete abandoned ones in a single call:
+
+```sql
+UPDATE WHERE status = 'Done' AND dartboard = 'Engineering/backend'
+  SET dartboard = 'Archive/2026-Q1';
+DELETE WHERE status = 'To Do'
+  AND updated_at < '2025-07-01T00:00:00Z'
+  AND priority = 'low'
+  CONFIRM
+```
+
+**Tip:** Semicolons separate statements. Each runs independently, so a failure in one does not block the others.
+
+## Reporting and Filtering
+
+### Find All Blocked Tasks
+
+Use `list_tasks` or `batch_update_tasks` with `dry_run: true` to query without changing anything:
+
+```sql
+UPDATE WHERE blocker_ids IS NOT NULL
+  SET tags = ['blocked-review']
+```
+
+Run this as a dry run first to see which tasks have blockers. If you want to tag them for tracking, execute with `dry_run: false`.
+
+### Filter Tasks by Date Range
+
+Find tasks created during a specific period:
+
+```sql
+UPDATE WHERE created_at BETWEEN '2026-03-01T00:00:00Z' AND '2026-03-31T23:59:59Z'
+  SET tags = ['march-audit']
+```
+
+### Find Unassigned Critical Tasks
+
+Identify critical tasks with no owner:
+
+```sql
+UPDATE WHERE priority = 'critical'
+  AND assignee IS NULL
+  SET tags = ['needs-owner']
+```
+
+### Search by Title Pattern
+
+Find tasks matching a keyword pattern:
+
+```sql
+UPDATE WHERE title LIKE '%authentication%'
+  AND status != 'Done'
+  SET tags = ['auth-related']
+```
+
+**Tip:** `LIKE` uses SQL-92 wildcards: `%` matches any characters, `_` matches a single character. Matching is case-insensitive.
+
+## Relationship Management
+
+### Set Up Release Blockers
+
+Mark critical tasks as blocking a release:
+
+```sql
+UPDATE WHERE priority = 'critical' AND status != 'Done'
+  SET blocking_ids = ['duid_release_v2']
+```
+
+**Important:** Relationship arrays use full replacement. This sets `blocking_ids` to exactly the value provided, replacing any previous values.
+
+### Clear All Blockers from a Dartboard
+
+Unblock all tasks in a dartboard after a dependency ships:
+
+```sql
+UPDATE WHERE dartboard = 'Engineering/frontend'
+  AND blocker_ids IS NOT NULL
+  SET blocker_ids = []
+```
+
+**Tip:** An empty array `[]` clears all relationships of that type.
+
+### Link Security Tasks to an Audit
+
+Tag and link all security-related tasks to an audit tracker:
+
+```sql
+UPDATE WHERE tags CONTAINS 'security'
+  SET related_ids = ['duid_security_audit_2026'],
+      priority = 'critical'
+```
+
+### Find Parent Tasks with Subtasks
+
+Identify tasks that have children:
+
+```sql
+UPDATE WHERE subtask_ids IS NOT NULL
+  AND tags CONTAINS 'epic'
+  SET tags = ['epic', 'has-subtasks']
+```
+
+### Find Tasks Blocked by a Specific Task
+
+Query which tasks depend on a particular blocker:
+
+```sql
+UPDATE WHERE blocker_ids CONTAINS 'duid_infra_migration'
+  SET tags = ['awaiting-infra']
+```
+
+## CSV Import Workflows
+
+### Import Tasks from a Spreadsheet
+
+Use `import_tasks_csv` with column mapping to create tasks from a CSV file:
+
+```typescript
+// Step 1: Validate without creating anything
+import_tasks_csv({
+  csv_file_path: "./backlog.csv",
+  dartboard: "Engineering/backend",
+  column_mapping: {
+    "Summary": "title",
+    "Details": "description",
+    "Owner Email": "assignee",
+    "Priority Level": "priority",
+    "Labels": "tags"
+  },
+  validate_only: true
+})
+
+// Step 2: Review validation results, then import
+import_tasks_csv({
+  csv_file_path: "./backlog.csv",
+  dartboard: "Engineering/backend",
+  column_mapping: {
+    "Summary": "title",
+    "Details": "description",
+    "Owner Email": "assignee",
+    "Priority Level": "priority",
+    "Labels": "tags"
+  },
+  validate_only: false
+})
+```
+
+**Tip:** Always call `get_config()` first to see valid dartboard names, priorities, and statuses for your workspace.
+
+### Import and Tag for Tracking
+
+After importing, tag the batch so you can manage them together:
+
+```sql
+UPDATE WHERE dartboard = 'Engineering/backend'
+  AND tags CONTAINS 'imported'
+  SET priority = 'medium'
+```
+
+Add an `imported` tag column in your CSV, or use the `default_values` parameter during import to auto-tag.
+
+## Performance Tips
+
+- **API-compatible selectors are faster.** Simple `=` on `assignee`, `status`, `dartboard`, `priority`, and `tags` goes directly to the Dart API. Complex operators like `OR`, `LIKE`, `IN`, and `BETWEEN` require client-side filtering (fetches all tasks first).
+- **Use `concurrency`** to control throughput. Default is 5; increase to 10-20 for large batches, decrease to 1-2 if hitting rate limits.
+- **Dry run first, always.** `dry_run: true` is the default. Preview your selector matches before executing any mutation.
+- **Multi-statement batches** run statements sequentially. Put the most important operation first.
+
+## Next Steps
+
+- [DartQL Syntax](/dart-query/dartql/syntax/) -- full operator and field reference
+- [Batch Operations](/dart-query/tools/batch-operations/) -- tool schemas and output formats
+- [Relationships](/dart-query/features/relationships/) -- managing blockers, subtasks, and related tasks
+- [CSV Import](/dart-query/features/csv-import/) -- detailed import options and field mapping

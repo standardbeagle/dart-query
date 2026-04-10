@@ -1,8 +1,178 @@
 ---
-title: Selectors
-description: How to use DartQL selectors to target tasks for batch operations.
+title: "Selectors: Patterns, Arrays, and Relationships"
+description: Advanced DartQL selector patterns including LIKE wildcards, CONTAINS for array fields, relationship queries, and performance optimization tips.
 sidebar:
   order: 2
 ---
 
-Content coming soon.
+This page covers DartQL's pattern matching, array operators, and relationship queries. For basic syntax, operators, and field reference, see the [Syntax Reference](/dart-query/dartql/syntax/).
+
+## LIKE Pattern Matching
+
+`LIKE` uses SQL-92 wildcards for case-insensitive text matching:
+
+| Wildcard | Meaning | Example | Matches |
+|----------|---------|---------|---------|
+| `%` | Any sequence of characters (including none) | `title LIKE 'Task%'` | "Task", "Task 1", "Task: deploy" |
+| `_` | Exactly one character | `title LIKE 'v_.0'` | "v1.0", "v2.0" but not "v10.0" |
+
+### Common Patterns
+
+**Starts with:**
+```sql
+title LIKE 'API%'
+```
+
+**Ends with:**
+```sql
+title LIKE '%fix'
+```
+
+**Contains substring:**
+```sql
+title LIKE '%authentication%'
+```
+
+**Single character wildcard:**
+```sql
+description LIKE 'API_%'
+-- Matches "API_v1", "API_v2" but not "API" (underscore requires one character)
+```
+
+**Combine wildcards:**
+```sql
+title LIKE 'v_.__%'
+-- Matches "v1.0", "v2.10", "v3.0-beta" but not "v10.0"
+```
+
+## CONTAINS for Array Fields
+
+`CONTAINS` (and its aliases `INCLUDES` and `HAS`) checks whether an array field includes a specific value.
+
+### Tag Filtering
+
+```sql
+-- Tasks tagged "urgent"
+tags CONTAINS 'urgent'
+
+-- Tasks tagged both "bug" AND "security"
+tags CONTAINS 'bug' AND tags CONTAINS 'security'
+
+-- Tasks tagged either "bug" OR "feature"
+tags CONTAINS 'bug' OR tags CONTAINS 'feature'
+```
+
+### Relationship Array Queries
+
+`CONTAINS` works with all relationship array fields to find tasks connected to a specific task ID.
+
+**Find tasks blocked by a specific task:**
+```sql
+blocker_ids CONTAINS 'duid_release_blocker'
+```
+
+**Find tasks that block a specific task:**
+```sql
+blocking_ids CONTAINS 'duid_deployment'
+```
+
+**Find related tasks:**
+```sql
+related_ids CONTAINS 'duid_feature_spec'
+```
+
+## Relationship Queries with IS NULL
+
+Use `IS NULL` and `IS NOT NULL` to find tasks based on whether they have relationships. Empty arrays `[]` are treated as NULL.
+
+**Find blocked tasks (tasks that have blockers):**
+```sql
+blocker_ids IS NOT NULL
+```
+
+**Find tasks that are blocking others:**
+```sql
+blocking_ids IS NOT NULL
+```
+
+**Find parent tasks (tasks that have subtasks):**
+```sql
+subtask_ids IS NOT NULL
+```
+
+**Find leaf tasks (no subtasks):**
+```sql
+subtask_ids IS NULL
+```
+
+**Find tasks with duplicates:**
+```sql
+duplicate_ids IS NOT NULL
+```
+
+### Combining Relationships with Other Filters
+
+```sql
+-- High-priority blocked tasks
+blocker_ids IS NOT NULL AND priority = 'high'
+
+-- Blocked tasks in a specific dartboard
+dartboard = 'Engineering/backend' AND blocker_ids IS NOT NULL
+
+-- Critical tasks blocking a release
+priority = 'critical' AND blocking_ids CONTAINS 'duid_release_v2'
+
+-- Parent tasks with urgent tag
+subtask_ids IS NOT NULL AND tags CONTAINS 'urgent'
+
+-- Unblocked tasks ready to start
+blocker_ids IS NULL AND status = 'To Do' AND priority = 'high'
+```
+
+## IN and NOT IN for Multiple Values
+
+`IN` is cleaner than chaining `OR` when checking a field against several values:
+
+```sql
+-- Instead of: status = 'To Do' OR status = 'Doing' OR status = 'Blocked'
+status IN ('To Do', 'Doing', 'Blocked')
+
+-- Exclude specific priorities
+priority NOT IN ('low')
+```
+
+## NULL Checks for Optional Fields
+
+Many task fields are optional. Use `IS NULL` to find tasks missing data:
+
+```sql
+-- Tasks without a due date
+due_at IS NULL
+
+-- Tasks that have an assignee
+assignee IS NOT NULL
+
+-- Unstarted tasks (no start date set)
+start_at IS NULL
+```
+
+## Performance Tips
+
+DartQL queries are fastest when they use API-compatible filters. See [Query Performance](/dart-query/dartql/syntax/#query-performance) in the Syntax Reference for the full breakdown.
+
+**Fast pattern** -- equality with AND:
+```sql
+status = 'To Do' AND dartboard = 'Engineering/backend' AND priority = 'high'
+```
+
+**Slower pattern** -- OR, LIKE, CONTAINS, and other advanced operators require client-side filtering:
+```sql
+title LIKE '%deploy%' OR tags CONTAINS 'infrastructure'
+```
+
+When mixing fast and slow filters, dart-query pushes the API-compatible parts to the server and applies the rest client-side. Put your most selective API-compatible conditions first to minimize the data fetched:
+
+```sql
+-- Good: dartboard and status narrow the API query; LIKE filters client-side
+dartboard = 'Engineering/backend' AND status = 'Doing' AND title LIKE '%deploy%'
+```

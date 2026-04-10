@@ -1,0 +1,100 @@
+---
+title: Discovery and Configuration
+description: Tools for exploring dart-query capabilities and retrieving workspace configuration.
+sidebar:
+  order: 0
+---
+
+## info
+
+Progressive discovery of dart-query capabilities. Start here to learn what tools are available.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `level` | `'overview' \| 'group' \| 'tool'` | No | Detail level (default: `'overview'`) |
+| `target` | `string` | No | Group name (when `level='group'`) or tool name (when `level='tool'`) |
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `level` | `string` | Echoed back from input |
+| `content` | `string` | Formatted documentation text |
+| `next_steps` | `string[]` | Suggested follow-up queries |
+
+### Examples
+
+**Browse all tool groups:**
+
+```typescript
+info()
+```
+
+Returns a table of 7 tool groups with counts and purposes.
+
+**Explore a specific group:**
+
+```typescript
+info({ level: "group", target: "task-crud" })
+```
+
+Lists all tools in the task-crud group with descriptions.
+
+**Get full documentation for a tool:**
+
+```typescript
+info({ level: "tool", target: "execute_dartql" })
+```
+
+Returns complete schema, examples, and DartQL syntax guide.
+
+---
+
+## get_config
+
+Retrieve workspace configuration including assignees, dartboards, statuses, tags, priorities, sizes, and folders. Results are cached for 5 minutes.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cache_bust` | `boolean` | No | Force refresh cached config (default: `false`) |
+| `include` | `string[]` | No | Limit to specific sections: `'assignees'`, `'dartboards'`, `'statuses'`, `'tags'`, `'priorities'`, `'sizes'`, `'folders'` |
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `assignees` | `array` | `{dart_id, name, email, role}` for each workspace member |
+| `dartboards` | `array` | `{dart_id, name, description}` for each dartboard |
+| `statuses` | `array` | `{dart_id, name, color, order}` for each status |
+| `tags` | `array` | `{dart_id, name, color}` for each tag |
+| `priorities` | `array` | `{value: 1-5, label}` priority levels |
+| `sizes` | `array` | `{value: 1-5, label}` size levels |
+| `folders` | `array` | `{dart_id, name, space_id}` for each folder |
+| `cached_at` | `string` | ISO 8601 timestamp of cache time |
+| `cache_ttl_seconds` | `integer` | Seconds until cache expires |
+
+### Examples
+
+**Get full workspace configuration:**
+
+```typescript
+get_config()
+```
+
+Returns all configuration sections. Use this before creating tasks to resolve dartboard IDs, assignee emails, and valid statuses.
+
+**Get only dartboards and assignees (token-efficient):**
+
+```typescript
+get_config({ include: ["dartboards", "assignees"] })
+```
+
+**Force refresh after workspace changes:**
+
+```typescript
+get_config({ cache_bust: true })
+```

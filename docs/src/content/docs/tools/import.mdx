@@ -1,0 +1,98 @@
+---
+title: CSV Import
+description: Bulk-create tasks from CSV data with validation, column mapping, and error recovery.
+sidebar:
+  order: 5
+---
+
+## import_tasks_csv
+
+Bulk-create tasks from CSV data (inline or file path) with validation and parallel creation. Always use `validate_only=true` first to preview and catch errors.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `csv_data` | `string` | No | Inline CSV content (first row must be headers). Use this or `csv_file_path`. |
+| `csv_file_path` | `string` | No | Path to CSV file. Use this or `csv_data`. |
+| `dartboard` | `string` | Yes | Default dartboard (dart_id or name) for imported tasks |
+| `column_mapping` | `object` | No | Map custom column names to standard fields (e.g., `{"Task Name": "title"}`) |
+| `validate_only` | `boolean` | No | Preview without creating tasks (default: `true`) |
+| `continue_on_error` | `boolean` | No | Continue on row failures (default: `true`) |
+| `concurrency` | `integer` | No | Parallel task creation (default: 5, range: 1-20) |
+
+### CSV Column Names
+
+Column names are case-insensitive with flexible aliases:
+
+| Standard Name | Aliases |
+|---------------|---------|
+| `title` | Title, Task Name |
+| `description` | Description |
+| `status` | Status |
+| `priority` | Priority |
+| `size` | Size |
+| `assignee` | Assigned To, Owner |
+| `dartboard` | Dartboard (overrides default per-row) |
+| `tags` | Tags, Labels (comma-separated) |
+| `due_date` | Due Date |
+| `start_date` | Start Date |
+| `parent_task` | Parent Task |
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `batch_operation_id` | `string` | Tracking ID |
+| `validate_only` | `boolean` | Whether preview mode |
+| `total_rows` | `integer` | Rows in CSV |
+| `valid_rows` | `integer` | Rows passing validation |
+| `validation_errors` | `array` | Per-row error details |
+| `created_tasks` | `integer` | Tasks created (when not validating) |
+| `failed_tasks` | `integer` | Tasks that failed creation |
+
+### Examples
+
+**Validate inline CSV:**
+
+```typescript
+import_tasks_csv({
+  dartboard: "Sprint 12",
+  csv_data: `title,priority,assignee,tags
+"Fix login bug",5,engineer@company.com,"bug,urgent"
+"Update API docs",2,writer@company.com,documentation`,
+  validate_only: true
+})
+```
+
+**Import from file after validation:**
+
+```typescript
+import_tasks_csv({
+  dartboard: "Sprint 12",
+  csv_file_path: "/path/to/tasks.csv",
+  validate_only: false
+})
+```
+
+**Import with custom column mapping:**
+
+```typescript
+import_tasks_csv({
+  dartboard: "Backlog",
+  csv_file_path: "/path/to/export.csv",
+  column_mapping: {
+    "Task Name": "title",
+    "Owner": "assignee",
+    "Labels": "tags"
+  },
+  validate_only: true
+})
+```
+
+### Recommended Workflow
+
+1. Run `get_config()` to find dartboard IDs and valid assignee emails
+2. Run `import_tasks_csv` with `validate_only: true` to preview
+3. Fix any CSV errors reported in `validation_errors`
+4. Run `import_tasks_csv` with `validate_only: false` to execute

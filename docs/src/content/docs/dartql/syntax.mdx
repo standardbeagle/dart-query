@@ -1,8 +1,205 @@
 ---
-title: Syntax Guide
-description: DartQL query language syntax reference.
+title: "DartQL Syntax Reference"
+description: Complete reference for DartQL, the SQL-92 WHERE clause query language used by dart-query to filter and target tasks in batch operations.
 sidebar:
   order: 1
 ---
 
-Content coming soon.
+DartQL uses **SQL-92 WHERE clause syntax** to filter tasks. If you know SQL, you already know DartQL.
+
+```sql
+status = 'To Do' AND priority = 'high'
+```
+
+## Syntax Overview
+
+Every DartQL expression follows the pattern:
+
+```sql
+field operator value [AND|OR field operator value ...]
+```
+
+String values must be quoted with single quotes. Field names and operators are case-insensitive.
+
+## Operators
+
+### Comparison Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `=` | Equals | `status = 'To Do'` |
+| `!=` | Not equals | `priority != 'low'` |
+| `<>` | Not equals (SQL-92 alias for `!=`) | `priority <> 'low'` |
+| `>` | Greater than | `due_at > '2026-02-01'` |
+| `>=` | Greater than or equal | `priority >= 'high'` |
+| `<` | Less than | `due_at < '2026-01-18'` |
+| `<=` | Less than or equal | `priority <= 'medium'` |
+
+### Set Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `IN` | Value is in a list | `status IN ('To Do', 'Doing')` |
+| `NOT IN` | Value is not in a list | `priority NOT IN ('low')` |
+| `BETWEEN` | Value is within a range (inclusive) | `created_at BETWEEN '2026-01-01' AND '2026-01-31'` |
+
+### Pattern and Array Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `LIKE` | Pattern match (case-insensitive) | `title LIKE '%authentication%'` |
+| `CONTAINS` | Array contains value | `tags CONTAINS 'urgent'` |
+| `INCLUDES` | Alias for `CONTAINS` | `tags INCLUDES 'bug'` |
+| `HAS` | Alias for `CONTAINS` | `tags HAS 'security'` |
+
+### NULL Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `IS NULL` | Field is null, undefined, or empty | `due_at IS NULL` |
+| `IS NOT NULL` | Field has a value | `assignee IS NOT NULL` |
+
+For array fields like `blocker_ids`, `IS NULL` matches empty arrays `[]` as well as undefined.
+
+## Logical Operators and Precedence
+
+Combine conditions with logical operators:
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `AND` | Both conditions must be true | `status = 'To Do' AND priority = 'high'` |
+| `OR` | Either condition must be true | `status = 'To Do' OR status = 'Doing'` |
+| `NOT` | Negates a condition | `NOT (priority = 'low')` |
+| `( )` | Groups conditions to control evaluation order | `(status = 'To Do' OR status = 'Doing') AND priority = 'high'` |
+
+**Precedence** (highest to lowest):
+1. `( )` -- parenthesized groups
+2. `NOT`
+3. `AND`
+4. `OR`
+
+Without parentheses, `AND` binds tighter than `OR`. This query:
+
+```sql
+status = 'To Do' OR status = 'Doing' AND priority = 'high'
+```
+
+is evaluated as:
+
+```sql
+status = 'To Do' OR (status = 'Doing' AND priority = 'high')
+```
+
+Use parentheses to make intent explicit:
+
+```sql
+(status = 'To Do' OR status = 'Doing') AND priority = 'high'
+```
+
+## Field Reference
+
+### Core Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Task status (e.g., `'To Do'`, `'Doing'`, `'Done'`) |
+| `priority` | string | Priority level (e.g., `'low'`, `'medium'`, `'high'`, `'critical'`) |
+| `size` | string | Size estimate |
+| `title` | string | Task title |
+| `description` | string | Task description body |
+| `assignee` | string | Assignee email address |
+| `dartboard` | string | Dartboard path (e.g., `'Engineering/backend'`) |
+| `tags` | array | Tag strings |
+| `dart_id` | string | Unique task identifier |
+
+### Date Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `created_at` | timestamp | When the task was created |
+| `updated_at` | timestamp | When the task was last modified |
+| `due_at` | timestamp | Task due date |
+| `start_at` | timestamp | Task start date |
+| `completed_at` | timestamp | When the task was completed |
+
+Date values use ISO 8601 format: `'2026-01-15T00:00:00Z'` or `'2026-01-15'`.
+
+### Relationship Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `parent_task` | string | Parent task ID |
+| `subtask_ids` | array | IDs of child tasks |
+| `blocker_ids` | array | IDs of tasks blocking this one |
+| `blocking_ids` | array | IDs of tasks this one blocks |
+| `duplicate_ids` | array | IDs of duplicate tasks |
+| `related_ids` | array | IDs of related tasks |
+
+## Query Performance
+
+dart-query automatically optimizes queries by pushing compatible filters to the Dart API. Filters that cannot be pushed are applied client-side.
+
+### API-Compatible Filters (Fast)
+
+These filters are sent directly to the Dart API and return only matching tasks:
+
+- `=` equality on: `assignee`, `status`, `dartboard`, `priority`, `tags`
+- Range operators (`<`, `>`, `<=`, `>=`) on: `due_at`
+- `AND` logic only
+
+```sql
+-- Fast: all conditions are API-compatible
+status = 'To Do' AND dartboard = 'Engineering/backend' AND priority = 'high'
+```
+
+### Client-Side Filters (Slower)
+
+These require fetching tasks first, then filtering in memory:
+
+- `OR` logic
+- `NOT` logic
+- `!=` and `<>` operators
+- `IN`, `NOT IN`, `LIKE`, `CONTAINS`, `IS NULL`, `IS NOT NULL`, `BETWEEN`
+- Any operator on fields not listed above
+
+```sql
+-- Slower: OR triggers client-side filtering
+status = 'To Do' OR status = 'Doing'
+
+-- Faster equivalent using IN (still client-side, but cleaner)
+status IN ('To Do', 'Doing')
+```
+
+For best performance, combine API-compatible conditions with `AND` and limit client-side filters to what you actually need.
+
+## Examples
+
+### Simple Equality
+
+```sql
+status = 'To Do'
+dartboard = 'Engineering/backend'
+priority = 'high'
+```
+
+### Multiple Conditions
+
+```sql
+status = 'To Do' AND priority = 'high'
+dartboard = 'Engineering/backend' AND assignee = 'john@company.com'
+```
+
+### Date Ranges
+
+```sql
+due_at < '2026-01-18T00:00:00Z'
+due_at > '2026-02-01T00:00:00Z'
+created_at BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-31T23:59:59Z'
+```
+
+### Complex Queries
+
+```sql
+(status = 'To Do' OR status = 'Doing') AND priority = 'high'
+dartboard = 'Engineering/backend' AND (priority = 'critical' OR tags CONTAINS 'urgent')
+```

@@ -1,0 +1,64 @@
+---
+title: Workspace Navigation
+description: Tools for looking up dartboard and folder details.
+sidebar:
+  order: 6
+---
+
+## get_dartboard
+
+Get details about a dartboard including task count.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dartboard_id` | `string` | Yes | Dartboard dart_id or name |
+
+### Response
+
+Returns dartboard details including `dart_id`, `name`, `description`, and task count.
+
+### Examples
+
+**Look up a dartboard by name:**
+
+```typescript
+get_dartboard({ dartboard_id: "Sprint 12" })
+```
+
+**Look up by dart_id:**
+
+```typescript
+get_dartboard({ dartboard_id: "duid_board123" })
+```
+
+---
+
+## get_folder
+
+Get details about a folder including document count.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `folder_id` | `string` | Yes | Folder dart_id or name |
+
+### Response
+
+Returns folder details including `dart_id`, `name`, `space_id`, and document count.
+
+### Examples
+
+**Look up a folder by name:**
+
+```typescript
+get_folder({ folder_id: "Engineering" })
+```
+
+**Look up by dart_id:**
+
+```typescript
+get_folder({ folder_id: "duid_folder123" })
+```

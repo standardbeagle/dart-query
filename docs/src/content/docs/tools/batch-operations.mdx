@@ -1,8 +1,195 @@
 ---
 title: Batch Operations
-description: Tools for updating multiple tasks at once using DartQL selectors.
+description: Tools for updating and deleting multiple tasks using DartQL statements.
 sidebar:
-  order: 2
+  order: 3
 ---
 
-Content coming soon.
+## execute_dartql
+
+Execute DartQL UPDATE and DELETE statements with template variables, array literals, comments, and multi-statement support. This is the preferred tool for bulk operations.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | `string` | Yes | One or more DartQL statements separated by `;` |
+| `dry_run` | `boolean` | No | Preview without executing (default: `true`) |
+| `concurrency` | `integer` | No | Max concurrent API calls per statement (default: 5, range: 1-20) |
+
+### Statement Syntax
+
+```
+UPDATE WHERE <expression> SET <field> = <value> [, ...] [COMMENT '<template>']
+DELETE WHERE <expression> [CONFIRM]
+```
+
+- **Values:** strings (`'text'`), numbers (`42`), `NULL`, arrays (`['a', 'b']`)
+- **Template vars:** `{field}` in COMMENT strings resolves to pre-update task values
+- **Safety:** `dry_run=true` by default; DELETE requires `CONFIRM` when `dry_run=false`
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `batch_operation_id` | `string` | ID for tracking with `get_batch_status` |
+| `dry_run` | `boolean` | Whether this was a preview |
+| `statements` | `array` | Results per statement |
+| `total_matched` | `integer` | Total tasks matched |
+| `total_succeeded` | `integer` | Tasks successfully modified |
+| `total_failed` | `integer` | Tasks that failed |
+| `execution_time_ms` | `integer` | Total execution time |
+
+### Examples
+
+**Preview a batch status change:**
+
+```typescript
+execute_dartql({
+  query: "UPDATE WHERE status = 'Todo' AND dartboard = 'Sprint 12' SET status = 'Done'",
+  dry_run: true
+})
+```
+
+**Update with a comment template:**
+
+```typescript
+execute_dartql({
+  query: "UPDATE WHERE priority = 5 AND status = 'Todo' SET status = 'Doing' COMMENT 'Auto-started: {title}'",
+  dry_run: false
+})
+```
+
+**Multi-statement execution:**
+
+```typescript
+execute_dartql({
+  query: "UPDATE WHERE tags CONTAINS 'v1' SET tags = ['v2']; DELETE WHERE status = 'Archived' AND due_at < '2025-01-01' CONFIRM",
+  dry_run: false
+})
+```
+
+---
+
+## batch_update_tasks
+
+:::caution[Deprecated]
+Use [`execute_dartql`](#execute_dartql) instead. This tool remains available for backward compatibility.
+:::
+
+Update multiple tasks matching a DartQL selector expression.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `selector` | `string` | Yes | DartQL WHERE clause |
+| `updates` | `object` | Yes | Fields to update: `title`, `description`, `dartboard`, `status`, `priority`, `size`, `assignees`, `tags`, `due_at`, `start_at`, `parent_task`, `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids` |
+| `dry_run` | `boolean` | No | Preview mode (default: `true`) |
+| `concurrency` | `integer` | No | Parallel updates (default: 5, range: 1-20) |
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `batch_operation_id` | `string` | Tracking ID |
+| `selector_matched` | `integer` | Tasks matching selector |
+| `dry_run` | `boolean` | Whether preview mode |
+| `preview_tasks` | `array` | Matched tasks (when `dry_run=true`) |
+| `successful_updates` | `integer` | Tasks updated |
+| `failed_updates` | `integer` | Tasks that failed |
+| `execution_time_ms` | `integer` | Execution time |
+
+### Examples
+
+**Preview changing priority for a dartboard:**
+
+```typescript
+batch_update_tasks({
+  selector: "dartboard = 'Backlog' AND priority >= 4",
+  updates: { status: "Doing" },
+  dry_run: true
+})
+```
+
+**Execute the update after preview:**
+
+```typescript
+batch_update_tasks({
+  selector: "dartboard = 'Backlog' AND priority >= 4",
+  updates: { status: "Doing" },
+  dry_run: false
+})
+```
+
+---
+
+## batch_delete_tasks
+
+:::caution[Deprecated]
+Use [`execute_dartql`](#execute_dartql) instead. This tool remains available for backward compatibility.
+:::
+
+Delete multiple tasks matching a DartQL selector. Tasks move to trash and are recoverable.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `selector` | `string` | Yes | DartQL WHERE clause |
+| `dry_run` | `boolean` | No | Preview mode (default: `true`) |
+| `confirm` | `boolean` | No | Required when `dry_run=false` |
+| `concurrency` | `integer` | No | Parallel deletions (default: 5, range: 1-20) |
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `batch_operation_id` | `string` | Tracking ID |
+| `selector_matched` | `integer` | Tasks matching selector |
+| `dry_run` | `boolean` | Whether preview mode |
+| `successful_deletes` | `integer` | Tasks deleted |
+| `failed_deletes` | `integer` | Tasks that failed |
+
+### Examples
+
+**Preview deletion:**
+
+```typescript
+batch_delete_tasks({
+  selector: "status = 'Archived' AND due_at < '2025-01-01'",
+  dry_run: true
+})
+```
+
+**Execute deletion (requires confirm):**
+
+```typescript
+batch_delete_tasks({
+  selector: "status = 'Archived' AND due_at < '2025-01-01'",
+  dry_run: false,
+  confirm: true
+})
+```
+
+---
+
+## get_batch_status
+
+Retrieve the status of a batch operation. Operations are kept in memory for 1 hour.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `batch_operation_id` | `string` | Yes | ID returned from any batch operation |
+
+### Response
+
+Returns the full operation result including matched count, success count, failure details, and execution time.
+
+### Examples
+
+```typescript
+get_batch_status({ batch_operation_id: "batch_abc123" })
+```

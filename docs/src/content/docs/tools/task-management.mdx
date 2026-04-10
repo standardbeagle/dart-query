@@ -1,8 +1,355 @@
 ---
 title: Task Management
-description: Tools for creating, updating, and querying individual tasks.
+description: Tools for creating, reading, updating, deleting, and operating on individual tasks.
 sidebar:
   order: 1
 ---
 
-Content coming soon.
+## create_task
+
+Create a new task with properties and relationships.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `title` | `string` | Yes | Task title (max 500 chars) |
+| `dartboard` | `string` | Yes | Dartboard dart_id (use `get_config` to find) |
+| `description` | `string` | No | Task description (markdown supported) |
+| `status` | `string` | No | Status name or dart_id |
+| `priority` | `integer` | No | Priority 1-5 (1=lowest, 5=highest) |
+| `size` | `integer` | No | Size estimate 1-5 |
+| `assignees` | `string[]` | No | Assignee dart_ids |
+| `tags` | `string[]` | No | Tag dart_ids |
+| `due_at` | `string` | No | Due date (ISO 8601) |
+| `start_at` | `string` | No | Start date (ISO 8601) |
+| `parent_task` | `string` | No | Parent task dart_id |
+| `subtask_ids` | `string[]` | No | Subtask dart_ids |
+| `blocker_ids` | `string[]` | No | Tasks that block this task |
+| `blocking_ids` | `string[]` | No | Tasks this task blocks |
+| `duplicate_ids` | `string[]` | No | Duplicate task dart_ids |
+| `related_ids` | `string[]` | No | Related task dart_ids |
+| `comment` | `string` | No | Comment to add after creation |
+
+### Response
+
+Returns the full created task object with `dart_id`, `title`, `status`, and all set fields.
+
+### Examples
+
+**Create a simple task:**
+
+```typescript
+create_task({
+  title: "Fix login page redirect",
+  dartboard: "duid_abc123"
+})
+```
+
+**Create a task with relationships and metadata:**
+
+```typescript
+create_task({
+  title: "Implement OAuth flow",
+  dartboard: "duid_abc123",
+  description: "Add Google and GitHub OAuth providers",
+  priority: 4,
+  assignees: ["duid_user1"],
+  tags: ["duid_auth"],
+  blocker_ids: ["duid_task_design"],
+  comment: "Spec approved in design review"
+})
+```
+
+---
+
+## get_task
+
+Retrieve a task by dart_id with optional comments and relationship expansion.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dart_id` | `string` | Yes | Task dart_id |
+| `include_comments` | `boolean` | No | Include comments (default: `false`) |
+| `include_relationships` | `boolean` | No | Include relationship fields and counts (default: `true`) |
+| `expand_relationships` | `boolean` | No | Fetch titles for related tasks (default: `false`, adds API calls) |
+
+### Response
+
+Returns the full task object. When `include_relationships` is true, includes `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`, and `relationship_counts`.
+
+### Examples
+
+**Get task details:**
+
+```typescript
+get_task({ dart_id: "duid_abc123" })
+```
+
+**Get task with comments and expanded relationships:**
+
+```typescript
+get_task({
+  dart_id: "duid_abc123",
+  include_comments: true,
+  expand_relationships: true
+})
+```
+
+---
+
+## update_task
+
+Update task properties. Uses flat parameters (not nested). Relationship arrays use full replacement unless using `add_to`/`remove_from`.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dart_id` | `string` | Yes | Task dart_id |
+| `title` | `string` | No | New title |
+| `description` | `string` | No | New description (markdown) |
+| `dartboard` | `string` | No | Dartboard dart_id or name |
+| `status` | `string` | No | Status dart_id or name |
+| `priority` | `integer` | No | Priority 1-5 |
+| `size` | `integer` | No | Size 1-5 |
+| `assignees` | `string[]` | No | Assignee dart_ids, names, or emails |
+| `tags` | `string[]` | No | Tag dart_ids or names |
+| `due_at` | `string` | No | Due date (ISO 8601) |
+| `start_at` | `string` | No | Start date (ISO 8601) |
+| `parent_task` | `string` | No | Parent task dart_id |
+| `subtask_ids` | `string[]` | No | Full replacement of subtask IDs (`[]` to clear) |
+| `blocker_ids` | `string[]` | No | Full replacement of blocker IDs (`[]` to clear) |
+| `blocking_ids` | `string[]` | No | Full replacement of blocking IDs (`[]` to clear) |
+| `duplicate_ids` | `string[]` | No | Full replacement of duplicate IDs (`[]` to clear) |
+| `related_ids` | `string[]` | No | Full replacement of related IDs (`[]` to clear) |
+| `comment` | `string` | No | Comment to add after updating |
+| `add_to` | `object` | No | Append IDs to relationship arrays (merges and deduplicates) |
+| `remove_from` | `object` | No | Remove IDs from relationship arrays |
+
+The `add_to` and `remove_from` objects accept these keys: `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`.
+
+### Response
+
+Returns the updated task object with `updated_fields` listing which fields changed.
+
+### Examples
+
+**Change status and add a comment:**
+
+```typescript
+update_task({
+  dart_id: "duid_abc123",
+  status: "Done",
+  comment: "Completed after code review"
+})
+```
+
+**Add a blocker without replacing existing blockers:**
+
+```typescript
+update_task({
+  dart_id: "duid_abc123",
+  add_to: { blocker_ids: ["duid_new_blocker"] }
+})
+```
+
+**Clear all related tasks:**
+
+```typescript
+update_task({
+  dart_id: "duid_abc123",
+  related_ids: []
+})
+```
+
+---
+
+## delete_task
+
+Move a task to trash. Recoverable from the Dart web UI.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dart_id` | `string` | Yes | Task dart_id |
+
+### Response
+
+Returns confirmation with the deleted task's `dart_id` and `title`.
+
+### Examples
+
+```typescript
+delete_task({ dart_id: "duid_abc123" })
+```
+
+---
+
+## add_task_comment
+
+Add a comment to a task. Supports markdown formatting.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dart_id` | `string` | Yes | Task dart_id |
+| `text` | `string` | Yes | Comment text (markdown supported) |
+
+### Response
+
+Returns the created comment with `id`, `text`, and `created_at`.
+
+### Examples
+
+**Add a status update:**
+
+```typescript
+add_task_comment({
+  dart_id: "duid_abc123",
+  text: "## Progress Update\n\nAPI integration complete. Starting frontend work."
+})
+```
+
+---
+
+## list_comments
+
+List comments on a task with pagination.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `task_id` | `string` | Yes | Task dart_id |
+| `limit` | `integer` | No | Max comments to return (default: 50, max: 100) |
+| `offset` | `integer` | No | Pagination offset (default: 0) |
+
+### Response
+
+Returns an array of comments with `id`, `text`, `created_at`, and `author`.
+
+### Examples
+
+```typescript
+list_comments({ task_id: "duid_abc123" })
+```
+
+```typescript
+list_comments({ task_id: "duid_abc123", limit: 10, offset: 20 })
+```
+
+---
+
+## move_task
+
+Move or reposition a task within a dartboard or to a different dartboard.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dart_id` | `string` | Yes | Task dart_id |
+| `dartboard` | `string` | No | Target dartboard (dart_id or name) |
+| `order` | `integer` | No | Position index (0-based) |
+| `after_id` | `string` | No | Place after this task dart_id |
+| `before_id` | `string` | No | Place before this task dart_id |
+
+### Response
+
+Returns the updated task object at its new position.
+
+### Examples
+
+**Move task to another dartboard:**
+
+```typescript
+move_task({
+  dart_id: "duid_abc123",
+  dartboard: "Backlog"
+})
+```
+
+**Position task after another task:**
+
+```typescript
+move_task({
+  dart_id: "duid_abc123",
+  after_id: "duid_other_task"
+})
+```
+
+---
+
+## add_time_tracking
+
+Add a time tracking entry to a task.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dart_id` | `string` | Yes | Task dart_id |
+| `started_at` | `string` | Yes | Start time (ISO 8601) |
+| `finished_at` | `string` | No | End time (ISO 8601, optional if `duration_minutes` provided) |
+| `duration_minutes` | `integer` | No | Duration in minutes (optional if `finished_at` provided) |
+| `note` | `string` | No | Note about the time entry |
+
+### Response
+
+Returns the created time tracking entry.
+
+### Examples
+
+**Track time with start and end:**
+
+```typescript
+add_time_tracking({
+  dart_id: "duid_abc123",
+  started_at: "2026-01-25T10:00:00Z",
+  finished_at: "2026-01-25T11:30:00Z",
+  note: "Code review session"
+})
+```
+
+**Track time with duration:**
+
+```typescript
+add_time_tracking({
+  dart_id: "duid_abc123",
+  started_at: "2026-01-25T14:00:00Z",
+  duration_minutes: 45
+})
+```
+
+---
+
+## attach_url
+
+Attach a file from a public URL to a task.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dart_id` | `string` | Yes | Task dart_id |
+| `url` | `string` | Yes | Public URL of file to attach |
+| `filename` | `string` | No | Optional filename override |
+
+### Response
+
+Returns the attachment metadata including URL and filename.
+
+### Examples
+
+```typescript
+attach_url({
+  dart_id: "duid_abc123",
+  url: "https://example.com/design-spec.pdf",
+  filename: "v2-design-spec.pdf"
+})
+```

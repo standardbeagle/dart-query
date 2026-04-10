@@ -1,8 +1,128 @@
 ---
 title: Query Tools
-description: Tools for searching and listing tasks, dartboards, and properties.
+description: Tools for searching and listing tasks with filters, pagination, and relevance ranking.
 sidebar:
-  order: 3
+  order: 2
 ---
 
-Content coming soon.
+## list_tasks
+
+Query tasks with filters, pagination, and configurable detail levels.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `assignee` | `string` | No | Filter by assignee (dart_id, name, or email) |
+| `status` | `string` | No | Filter by status (dart_id or name) |
+| `dartboard` | `string` | No | Filter by dartboard (dart_id or name) |
+| `priority` | `integer` | No | Filter by priority (1-5) |
+| `tags` | `string[]` | No | Filter by tags (dart_ids or names) |
+| `due_before` | `string` | No | Tasks due before date (ISO 8601) |
+| `due_after` | `string` | No | Tasks due after date (ISO 8601) |
+| `has_parent` | `boolean` | No | `true` for subtasks only, `false` for root tasks only |
+| `limit` | `integer` | No | Max tasks (default: 50, max: 500) |
+| `offset` | `integer` | No | Pagination offset (default: 0) |
+| `detail_level` | `'minimal' \| 'standard' \| 'full'` | No | Controls response size |
+
+### Detail Levels
+
+| Level | Fields Included |
+|-------|----------------|
+| `minimal` | id, title, parent, blockers |
+| `standard` | + description, status, assignee, priority |
+| `full` | All fields including relationships |
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tasks` | `array` | Task objects at the requested detail level |
+| `total` | `integer` | Total matching tasks (for pagination) |
+| `limit` | `integer` | Applied limit |
+| `offset` | `integer` | Applied offset |
+
+### Examples
+
+**List all tasks on a dartboard:**
+
+```typescript
+list_tasks({ dartboard: "My Project" })
+```
+
+**Find high-priority tasks due this week:**
+
+```typescript
+list_tasks({
+  priority: 5,
+  due_before: "2026-01-31",
+  detail_level: "standard"
+})
+```
+
+**List root tasks only (no subtasks), paginated:**
+
+```typescript
+list_tasks({
+  dartboard: "Sprint 12",
+  has_parent: false,
+  limit: 20,
+  offset: 0
+})
+```
+
+---
+
+## search_tasks
+
+Full-text search across task titles and descriptions with relevance ranking. Supports quoted phrases, exclusions, and inline filters.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | `string` | Yes | Search query (see syntax below) |
+| `dartboard` | `string` | No | Dartboard filter (dart_id or name) |
+| `include_completed` | `boolean` | No | Include completed tasks (default: `false`) |
+| `limit` | `integer` | No | Max results (default: 50, max: 500) |
+
+### Query Syntax
+
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| `term` | Match word | `login` |
+| `"exact phrase"` | Match exact phrase | `"login page"` |
+| `-term` | Exclude word | `-draft` |
+| `dartboard:Name` | Inline dartboard filter | `dartboard:Backend` |
+| `status:Done` | Inline status filter | `status:Done` |
+| `assignee:Name` | Inline assignee filter | `assignee:Alice` |
+
+### Response
+
+Returns tasks ranked by relevance with match scores.
+
+### Examples
+
+**Search for login-related tasks:**
+
+```typescript
+search_tasks({ query: "login authentication" })
+```
+
+**Search with exclusions and filters:**
+
+```typescript
+search_tasks({
+  query: "\"API endpoint\" -deprecated status:Todo",
+  include_completed: false
+})
+```
+
+**Scoped search within a dartboard:**
+
+```typescript
+search_tasks({
+  query: "performance",
+  dartboard: "Backend Services"
+})
+```
