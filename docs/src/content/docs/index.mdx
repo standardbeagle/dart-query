@@ -1,0 +1,32 @@
+---
+title: dart-query
+description: MCP server for Dart AI task management with batch operations, DartQL selectors, and CSV import.
+template: splash
+hero:
+  tagline: A Model Context Protocol server for managing Dart AI projects from any MCP-compatible client.
+  actions:
+    - text: Get Started
+      link: /dart-query/tools/task-management/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/standardbeagle/dart-query
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Task Management" icon="pencil">
+    Create, update, and query tasks with a rich set of MCP tools.
+  </Card>
+  <Card title="Batch Operations" icon="list-format">
+    Update multiple tasks at once using DartQL selectors.
+  </Card>
+  <Card title="DartQL Selectors" icon="magnifier">
+    SQL-like query language for filtering and selecting tasks.
+  </Card>
+  <Card title="CSV Import" icon="document">
+    Import tasks from CSV files with automatic field mapping.
+  </Card>
+</CardGrid>

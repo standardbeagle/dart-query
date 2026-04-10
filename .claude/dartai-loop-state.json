@@ -1,8 +1,23 @@
 {
-  "iterations": 3,
+  "iterations": 1,
   "spawns": 1,
-  "started_at": null,
-  "last_spawn_at": "2026-02-17T09:11:29.346657",
-  "last_iteration_at": "2026-02-17T09:19:04.598943",
-  "last_subagent": "unknown"
+  "started_at": "2026-04-10T04:18:00.000Z",
+  "last_iteration_at": "2026-04-10T04:35:00.000Z",
+  "last_subagent": "a016bf1dc828f6e6e",
+  "loop_task_id": "312bpPxIo4IL",
+  "dartboard": "Personal/dart-query",
+  "runner_instance_id": "beagle-ab2-2017992",
+  "runner_email": "claude@anthropic.com",
+  "runner_dart_id": null,
+  "status": "running",
+  "tasks": [
+    {
+      "task_id": "jTAu1mnExmit",
+      "iteration": 1,
+      "status": "completed",
+      "started_at": "2026-04-10T04:18:00.000Z",
+      "completed_at": "2026-04-10T04:35:00.000Z",
+      "completion_summary": "Scaffolded Astro Starlight docs site in docs/ with sidebar, sitemap, GitHub Pages workflow, 14 content files"
+    }
+  ]
 }
