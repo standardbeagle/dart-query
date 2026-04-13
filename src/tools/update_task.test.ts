@@ -54,8 +54,7 @@ function setupMocks(config: DartConfig, returnTask: DartTask) {
       comment_id: 'comment_123',
       dart_id: returnTask.dart_id,
       text: 'test comment',
-      author: { dart_id: 'user1', name: 'Alice' },
-      created_at: '2026-01-15T12:00:00Z',
+      author: 'Alice',
     }),
     getTask: vi.fn().mockResolvedValue(returnTask),
   } as any));
@@ -154,7 +153,7 @@ describe('update_task - add_to relationship merging', () => {
   beforeEach(() => setupMocks(config, task));
 
   it('should merge add_to.blocker_ids with existing blockers', async () => {
-    const result = await handleUpdateTask({
+    await handleUpdateTask({
       dart_id: 'duid_test123',
       add_to: { blocker_ids: ['duid_blocker2'] },
     } as any);

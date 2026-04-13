@@ -526,8 +526,7 @@ export class DartClient {
     comment_id: string;
     dart_id: string;
     text: string;
-    author: { dart_id: string; name: string };
-    created_at: string;
+    author: string;
   }> {
     if (!dartId || typeof dartId !== 'string' || dartId.trim() === '') {
       throw new DartAPIError('dart_id is required and must be a non-empty string', 400);
@@ -536,45 +535,22 @@ export class DartClient {
       throw new DartAPIError('text is required and must be a non-empty string', 400);
     }
 
-    type CommentResponse = {
-      comment_id: string;
-      dart_id: string;
-      text: string;
-      author: { dart_id: string; name: string };
-      created_at: string;
-    };
-
     const trimmedId = dartId.trim();
-    const endpoint = `/tasks/${encodeURIComponent(trimmedId)}/comments`;
-    const retryDelays = [500, 1000, 2000];
+    const response = await this.request<{
+      item: {
+        id: string;
+        taskId: string;
+        text: string;
+        author: string;
+      };
+    }>('POST', '/comments', { item: { taskId: trimmedId, text } });
 
-    for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
-      try {
-        return await this.request<CommentResponse>('POST', endpoint, { text });
-      } catch (error) {
-        const is404 = error instanceof DartAPIError && error.statusCode === 404;
-        const hasRetriesLeft = attempt < retryDelays.length;
-
-        if (is404 && hasRetriesLeft) {
-          await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
-          continue;
-        }
-
-        if (is404) {
-          throw new DartAPIError(
-            `Task '${trimmedId}' not found after ${retryDelays.length} retries. ` +
-            'Newly created tasks may not be immediately available. ' +
-            'Use the "comment" parameter on create_task or update_task instead.',
-            404
-          );
-        }
-
-        throw error;
-      }
-    }
-
-    // Unreachable, but satisfies TypeScript
-    throw new DartAPIError('Unexpected error in addComment retry loop', 500);
+    return {
+      comment_id: response.item.id,
+      dart_id: response.item.taskId,
+      text: response.item.text,
+      author: response.item.author,
+    };
   }
 
   /**
@@ -588,8 +564,8 @@ export class DartClient {
     comments: Array<{
       comment_id: string;
       text: string;
-      author: { dart_id: string; name: string };
-      created_at: string;
+      author: string;
+      created_at?: string;
       parent_id?: string;
     }>;
     total: number;
@@ -612,7 +588,7 @@ export class DartClient {
       comments: (response.results || []).map((c: any) => ({
         comment_id: c.id || c.comment_id,
         text: c.text,
-        author: c.author || { dart_id: '', name: 'Unknown' },
+        author: c.author || 'Unknown',
         created_at: c.publishedAt || c.created_at,
         parent_id: c.parentId || c.parent_id,
       })),

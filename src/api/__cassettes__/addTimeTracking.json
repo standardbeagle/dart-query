@@ -4,12 +4,35 @@
   "exchanges": [
     {
       "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/config"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "data": {
+            "assignees": [
+              { "name": "Alice Smith", "email": "alice@example.com" }
+            ],
+            "dartboards": [],
+            "statuses": [],
+            "tags": [],
+            "priorities": [],
+            "sizes": [],
+            "folders": []
+          }
+        }
+      }
+    },
+    {
+      "request": {
         "method": "POST",
         "endpoint": "/api/v0/public/tasks/task_001/time-tracking",
         "body": {
+          "user": "alice@example.com",
           "startedAt": "2026-03-23T09:00:00Z",
           "finishedAt": "2026-03-23T11:00:00Z",
-          "durationMinutes": 120,
           "note": "Morning work session"
         }
       },

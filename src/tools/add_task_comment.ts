@@ -24,7 +24,7 @@ import {
  * - Returns complete comment with author info and timestamp
  *
  * @param input - Comment input with dart_id and text
- * @returns Comment details with comment_id, dart_id, text, author, created_at
+ * @returns Comment details with comment_id, dart_id, text, author
  * @throws ValidationError for invalid inputs
  * @throws DartAPIError for API errors (404 if task not found)
  */
@@ -84,7 +84,6 @@ export async function handleAddTaskComment(
       dart_id: comment.dart_id,
       text: comment.text,
       author: comment.author,
-      created_at: comment.created_at,
     };
   } catch (error) {
     // Enhanced error handling for 404 (task not found)

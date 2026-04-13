@@ -16,8 +16,7 @@
             {
               "id": "comment_001",
               "text": "Investigating this issue",
-              "author": { "dart_id": "user_1", "name": "Andy Brummer" },
-              "publishedAt": "2026-03-20T10:00:00Z",
+              "author": "Andy Brummer",
               "parentId": null
             }
           ]

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.5] - 2026-04-13
+
+### Fixed
+- **`add_task_comment` endpoint** — corrected from broken `POST /tasks/{id}/comments` to `POST /comments` with `{ item: { taskId, text } }` body per OpenAPI spec; removed obsolete retry-on-404 loop
+- **Comment API types** — `author` is now a string (not an object), `created_at` is optional on `DartComment` and omitted from `AddTaskCommentOutput` to match backend response
+- **DartQL `IS NULL` / `IS NOT NULL` client-side filtering** — removed incorrect `assignee` → `assignees` alias in `evaluateExpression` that caused wrong boolean results
+- **`add_time_tracking` snapshot test** — added missing `GET /config` cassette exchange and aligned assertions with current request shape
+
 ## [0.10.3] - 2026-04-09
 
 ### Fixed

@@ -74,7 +74,7 @@ describe('search_tasks - inline filter extraction', () => {
   });
 
   it('should prefer explicit dartboard param over inline filter', async () => {
-    const result = await handleSearchTasks({
+    await handleSearchTasks({
       query: 'dartboard:Personal/agnt bug',
       dartboard: 'Personal/dart-query',
     });

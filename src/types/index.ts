@@ -121,11 +121,8 @@ export interface DartComment {
   comment_id: string;
   dart_id?: string; // task id (optional in list responses)
   text: string;
-  author: {
-    dart_id: string;
-    name: string;
-  };
-  created_at: string;
+  author: string;
+  created_at?: string;
   parent_id?: string; // For threaded comments
 }
 
@@ -749,11 +746,7 @@ export interface AddTaskCommentOutput {
   comment_id: string;
   dart_id: string;
   text: string;
-  author: {
-    dart_id: string;
-    name: string;
-  };
-  created_at: string;
+  author: string;
 }
 
 // ============================================================================

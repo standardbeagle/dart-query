@@ -409,7 +409,6 @@ describe('DartClient.listComments', () => {
     expect(result.total).toBe(1);
     expect(result.comments[0].comment_id).toBe('comment_001');
     expect(result.comments[0].text).toBe('Investigating this issue');
-    expect(result.comments[0].created_at).toBe('2026-03-20T10:00:00Z');
 
     const cassette = recorder.getCassette();
     const endpoint = cassette.exchanges[0].request.endpoint;
@@ -586,11 +585,11 @@ describe('DartClient.addTimeTracking - all fields reach API', () => {
     expect(result.note).toBe('Morning work session');
 
     const cassette = recorder.getCassette();
-    const body = cassette.exchanges[0].request.body as Record<string, unknown>;
+    const exchange = cassette.exchanges.find(e => e.request.method === 'POST' && e.request.endpoint.includes('/time-tracking'))!;
+    const body = exchange.request.body as Record<string, unknown>;
 
     expect(body.startedAt).toBe('2026-03-23T09:00:00Z');
     expect(body.finishedAt).toBe('2026-03-23T11:00:00Z');
-    expect(body.durationMinutes).toBe(120);
     expect(body.note).toBe('Morning work session');
     // Must NOT have snake_case
     expect(body).not.toHaveProperty('started_at');
