@@ -82,9 +82,8 @@ dart-query uses **DartQL selectors** and **server-side batch operations** to do 
 
 ```typescript
 // Find and update all high-priority Engineering bugs to "Doing"
-batch_update_tasks({
-  selector: "dartboard = 'Engineering' AND priority = 'high' AND tags CONTAINS 'bug'",
-  updates: { status: "Doing" },
+execute_dartql({
+  query: "UPDATE WHERE dartboard = 'Engineering' AND priority = 'high' AND tags CONTAINS 'bug' SET status = 'Doing'",
   dry_run: true   // preview first
 })
 ```

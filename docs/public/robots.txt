@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://standardbeagle.github.io/dart-query/sitemap-index.xml

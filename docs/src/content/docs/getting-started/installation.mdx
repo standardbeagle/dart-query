@@ -92,10 +92,9 @@ You should see a summary of your Dart AI workspace including available dartboard
 Try a dry-run batch update to see dart-query in action without changing anything:
 
 ```typescript
-// Preview: find all high-priority tasks on a dartboard
-batch_update_tasks({
-  selector: "dartboard = 'My Project' AND priority = 'high'",
-  updates: { status: "Doing" },
+// Preview: find and start all high-priority tasks on a dartboard
+execute_dartql({
+  query: "UPDATE WHERE dartboard = 'My Project' AND priority = 'high' SET status = 'Doing'",
   dry_run: true
 })
 ```

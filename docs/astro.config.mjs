@@ -8,6 +8,25 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'dart-query',
+      description: 'MCP server for Dart AI with batch operations, DartQL selectors, CSV import, and zero context rot. Update hundreds of tasks in a single call.',
+      head: [
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:card', content: 'summary' },
+        },
+        {
+          tag: 'meta',
+          attrs: { name: 'twitter:site', content: '@standardbeagle' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:type', content: 'website' },
+        },
+        {
+          tag: 'meta',
+          attrs: { property: 'og:site_name', content: 'dart-query' },
+        },
+      ],
       social: [
         {
           icon: 'github',

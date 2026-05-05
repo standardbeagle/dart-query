@@ -1,0 +1,101 @@
+---
+title: "DartAI Loop Snapshot: Single-Call Queue Aggregation"
+description: Single-call aggregation for Dart AI agent loops. Returns claimable queue, workspace config, runner-claimed and blocked tasks in one round-trip — cuts two startup calls per iteration.
+sidebar:
+  order: 7
+---
+
+## dartai_loop_snapshot
+
+Single-call aggregation tailored for the [dartai](https://github.com/standardbeagle/standardbeagle-tools) adversarial cooperation loop. Returns the claimable queue, workspace assignees and statuses, runner-claimed tasks, and blocked tasks in one response — replacing three sequential calls (`get_config(['assignees'])` + `list_tasks(...)` + client-side filter) at loop startup.
+
+Designed for the `/dartai:start` command in the Ralph Wiggum loop, but usable by any agent harness that needs a fast read of "what can I work on right now?" against a Dart dartboard.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dartboard` | `string` | Yes | Dartboard name (e.g. `"Personal/agnt"`) or `dart_id`. Resolved against `configCache` by name first, then by ID. |
+| `runner_dart_id` | `string` | No | When provided, populates `runner_claimed` with In-Progress tasks assigned to this runner. Omit on the first call when the runner ID has not yet been resolved. |
+| `queue_limit` | `integer` | No | Maximum number of claimable tasks to return in `queue` (default: `20`). |
+
+### Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `dartboard_id` | `string` | Resolved `dart_id` of the requested dartboard. |
+| `config.statuses` | `string[]` | Available status names for the workspace. |
+| `config.assignees` | `{ dart_id, email }[]` | Workspace assignees, projected to ID + email pairs. |
+| `queue` | `TaskSummary[]` | Claimable tasks (`status='Todo'`, no `loop-blocked` tag, no `claimed:*` tag), capped at `queue_limit`. |
+| `runner_claimed` | `TaskSummary[]` | Tasks `status='In Progress'` whose `assignees` include `runner_dart_id`. Empty when `runner_dart_id` is omitted. |
+| `blocked` | `TaskSummary[]` | Tasks tagged `loop-blocked`. |
+| `fetched_at` | `string` | ISO-8601 timestamp the snapshot was assembled. |
+
+`TaskSummary` is a token-minimal projection of `DartTask`:
+
+```typescript
+interface TaskSummary {
+  dart_id: string;
+  title: string;
+  status: string;
+  tags: string[];
+  assignees: string[];
+}
+```
+
+### Partition Rules
+
+Tasks are partitioned in this order — first match wins:
+
+1. **`blocked`** — `tags` includes `'loop-blocked'`.
+2. **`runner_claimed`** — `runner_dart_id` is set, task `assignees` includes it, `status === 'In Progress'`.
+3. **`queue`** — `status === 'Todo'` and no tag starts with `'claimed:'`.
+4. Otherwise dropped (e.g. Done tasks, In-Progress tasks not assigned to this runner).
+
+The handler issues exactly one outbound `listTasks` call (limited to `queue_limit * 3` to cover the three buckets) plus one cached `configCache.get()`. Partitioning is client-side.
+
+### Examples
+
+**Cold start — runner_dart_id not yet resolved:**
+
+```typescript
+dartai_loop_snapshot({
+  dartboard: "Personal/agnt",
+  queue_limit: 20
+})
+```
+
+Returns config + queue + blocked, with `runner_claimed: []`. Resolve `runner_dart_id` from `result.config.assignees` by matching the runner's git email, then pass it on subsequent calls.
+
+**Warm iteration — runner identity cached:**
+
+```typescript
+dartai_loop_snapshot({
+  dartboard: "Personal/agnt",
+  runner_dart_id: "uS3rD4rt1d",
+  queue_limit: 20
+})
+```
+
+Now `runner_claimed` is populated, allowing the loop driver to detect interrupted In-Progress work and decide between resume-vs-orphan-warn before claiming new tasks.
+
+### Performance
+
+| Path | Outbound calls | Notes |
+|------|----------------|-------|
+| Loop start (this tool) | 1 `listTasks` + 1 cached config | One round-trip to the Dart API |
+| Equivalent with primitives | `get_config` + `list_tasks` + client filter | Two round-trips, more tokens |
+
+For a typical 20-task queue, response size is roughly 4–8 KB depending on tag/assignee density.
+
+### Auth and Errors
+
+- Requires `DART_TOKEN` in the environment. Missing token throws a `DartAPIError` with `statusCode: 401` and a link to retrieve the token.
+- Throws `Error('dartboard "{name}" not found')` if the dartboard name or ID does not match any entry in `configCache.dartboards`.
+- Throws if the config cache is empty — call [`get_config`](/dart-query/tools/discovery-config/#get_config) once at startup to prime it.
+
+### See Also
+
+- [`get_config`](/dart-query/tools/discovery-config/#get_config) — primes the cache used by this tool
+- [`list_tasks`](/dart-query/tools/query-tools/#list_tasks) — lower-level alternative when full task detail is needed
+- [`execute_dartql`](/dart-query/tools/batch-operations/#execute_dartql) — preferred path for bulk writes after the loop has chosen a task
