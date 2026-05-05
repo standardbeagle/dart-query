@@ -22,7 +22,7 @@
 
 ## Tool Groups Overview
 
-dart-query organizes 18 tools into 7 functional groups:
+dart-query organizes 19 tools into 8 functional groups:
 
 | Group | Tools | Purpose |
 |-------|-------|---------|

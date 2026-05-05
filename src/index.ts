@@ -622,7 +622,7 @@ class DartQueryServer {
                 description: 'Optional runner dart_id; when provided, runner_claimed array is populated',
               },
               queue_limit: {
-                type: 'number',
+                type: 'integer',
                 description: 'Max queue tasks to return (default 20)',
               },
             },
@@ -1110,7 +1110,7 @@ class DartQueryServer {
           }
 
           case 'dartai_loop_snapshot': {
-            const result = await handleDartaiLoopSnapshot((args || {}) as unknown as LoopSnapshotInput);
+            const result = await handleDartaiLoopSnapshot((args || {}) as LoopSnapshotInput);
             return {
               content: [
                 {
