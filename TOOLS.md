@@ -12,6 +12,7 @@
 - [Batch Operations](#batch-operations)
 - [CSV Import](#csv-import)
 - [Document Management](#document-management)
+- [DartAI Loop Tools](#dartai-loop-tools)
 - [DartQL Reference](#dartql-reference)
 - [Error Handling](#error-handling)
 - [Performance Optimization](#performance-optimization)
@@ -32,6 +33,7 @@ dart-query organizes 18 tools into 7 functional groups:
 | **task-batch** | 3 tools | Bulk operations (batch update, batch delete, status) |
 | **import** | 1 tool | CSV bulk import |
 | **doc-crud** | 5 tools | Document management (create, get, update, delete, list) |
+| **dartai-loop** | `dartai_loop_snapshot` | Single-call loop startup aggregation |
 
 **Token Budget Summary:**
 - Discovery: ~150 tokens (overview)
@@ -1199,6 +1201,63 @@ dart-query includes full document (notes/docs) management. Documents are separat
 ```
 
 **Note:** Docs move to trash (recoverable)
+
+---
+
+## DartAI Loop Tools
+
+### `dartai_loop_snapshot` - Loop Startup Aggregation
+
+**Purpose:** Single-call snapshot for dartai loop startup. Returns dartboard config, claimable queue, runner-claimed tasks, and blocked tasks in one response. Replaces the 3-call sequence (`get_config` + `list_tasks` + client filter) with one aggregated call, saving 2 round-trips per loop iteration start.
+
+**Input Schema:**
+```typescript
+{
+  dartboard: string                // REQUIRED — dartboard name or dart_id (e.g., "Personal/agnt")
+  runner_dart_id?: string          // optional runner dart_id; populates runner_claimed when set
+  queue_limit?: number             // max queue tasks returned (default: 20)
+}
+```
+
+**Output Schema:**
+```typescript
+{
+  dartboard_id: string
+  config: {
+    statuses: string[]                                       // dartboard's status names
+    assignees: { dart_id: string; email: string }[]          // available assignees
+  }
+  queue: TaskSummary[]            // Todo status, no `claimed:*` tag, not `loop-blocked` tagged
+  runner_claimed: TaskSummary[]   // In Progress + assigned to runner_dart_id (empty when runner not provided)
+  blocked: TaskSummary[]          // tasks tagged `loop-blocked` regardless of status
+  fetched_at: string              // ISO-8601 timestamp of when the snapshot was assembled
+}
+
+// where:
+type TaskSummary = {
+  dart_id: string
+  title: string
+  status: string
+  tags: string[]
+  assignees: string[]
+}
+```
+
+**Examples:**
+
+```typescript
+// Minimal — just claimable queue + config
+dartai_loop_snapshot({ dartboard: "Personal/agnt" })
+
+// With runner partition — includes tasks already claimed by this runner
+dartai_loop_snapshot({
+  dartboard: "Personal/agnt",
+  runner_dart_id: "ru_abc123",
+  queue_limit: 50
+})
+```
+
+**Performance:** Exactly one outbound `listTasks` call plus one cached `get_config` read. Designed to be the first call in `dartai:start` / `workflow:start-loop` skill flows.
 
 ---
 

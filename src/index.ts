@@ -73,7 +73,9 @@ import { handleAddTimeTracking } from './tools/add_time_tracking.js';
 import { handleAttachUrl } from './tools/attach_url.js';
 import { handleGetDartboard } from './tools/get_dartboard.js';
 import { handleGetFolder } from './tools/get_folder.js';
+import { handleDartaiLoopSnapshot } from './tools/dartai_loop_snapshot.js';
 import { DartAPIError, ValidationError, DartQLParseError } from './types/index.js';
+import type { LoopSnapshotInput } from './types/index.js';
 
 // Warn if DART_TOKEN is missing (but don't exit - tools will fail when called)
 const DART_TOKEN = process.env.DART_TOKEN;
@@ -606,6 +608,28 @@ class DartQueryServer {
           },
         },
         {
+          name: 'dartai_loop_snapshot',
+          description: 'Single-call snapshot for dartai loop startup. Returns claimable queue, config, runner-claimed tasks, and blocked tasks. Replaces 3 sequential calls (get_config + list_tasks + filter) with 1 aggregation. Designed for dartai:start command.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dartboard: {
+                type: 'string',
+                description: 'Dartboard name or dart_id (e.g., "Personal/agnt")',
+              },
+              runner_dart_id: {
+                type: 'string',
+                description: 'Optional runner dart_id; when provided, runner_claimed array is populated',
+              },
+              queue_limit: {
+                type: 'number',
+                description: 'Max queue tasks to return (default 20)',
+              },
+            },
+            required: ['dartboard'],
+          },
+        },
+        {
           name: 'get_batch_status',
           description: 'Retrieve status of a batch operation (update, delete, import, or dartql) by batch_operation_id. Operations are kept in memory for 1 hour.',
           inputSchema: {
@@ -1075,6 +1099,18 @@ class DartQueryServer {
 
           case 'execute_dartql': {
             const result = await handleExecuteDartQL((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'dartai_loop_snapshot': {
+            const result = await handleDartaiLoopSnapshot((args || {}) as unknown as LoopSnapshotInput);
             return {
               content: [
                 {
