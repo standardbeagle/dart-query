@@ -1110,7 +1110,7 @@ class DartQueryServer {
           }
 
           case 'dartai_loop_snapshot': {
-            const result = await handleDartaiLoopSnapshot((args || {}) as LoopSnapshotInput);
+            const result = await handleDartaiLoopSnapshot((args || {}) as unknown as LoopSnapshotInput);
             return {
               content: [
                 {
