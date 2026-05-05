@@ -446,6 +446,13 @@ export interface ListTasksOutput {
 // Loop Snapshot Types (dartai_loop_snapshot)
 // ============================================================================
 
+/**
+ * Compact task representation for loop snapshot output.
+ *
+ * Note: kept standalone (not `Pick<DartTask, ...>`) because `DartTask.status`
+ * is optional (`string | undefined`) while loop snapshot guarantees a string —
+ * tasks without a status are not partitioned into any bucket.
+ */
 export interface TaskSummary {
   dart_id: string;
   title: string;
@@ -455,8 +462,11 @@ export interface TaskSummary {
 }
 
 export interface LoopSnapshotInput {
+  /** Dartboard name (exact match) or dart_id. Resolved against config cache. */
   dartboard: string;
+  /** Optional runner dart_id; when set, populates `runner_claimed` partition. */
   runner_dart_id?: string;
+  /** Max tasks returned in `queue`. Default 20. */
   queue_limit?: number;
 }
 
@@ -466,9 +476,13 @@ export interface LoopSnapshotOutput {
     statuses: string[];
     assignees: { dart_id: string; email: string }[];
   };
+  /** Todo status, no `claimed:*` tag, not `loop-blocked` tagged. */
   queue: TaskSummary[];
+  /** In Progress status assigned to `runner_dart_id`. Empty when runner not provided. */
   runner_claimed: TaskSummary[];
+  /** Tasks tagged `loop-blocked` regardless of status. */
   blocked: TaskSummary[];
+  /** ISO-8601 timestamp of when the snapshot was assembled. */
   fetched_at: string;
 }
 

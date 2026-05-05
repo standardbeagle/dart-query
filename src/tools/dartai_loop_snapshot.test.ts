@@ -53,4 +53,26 @@ describe('dartai_loop_snapshot', () => {
     const result = await handleDartaiLoopSnapshot(input);
     expect(result.runner_claimed).toEqual([]);
   });
+
+  it('truncates queue to queue_limit after partition', async () => {
+    const { DartClient } = await import('../api/dartClient.js');
+    const MockedDartClient = DartClient as unknown as ReturnType<typeof vi.fn>;
+    MockedDartClient.mockImplementationOnce(() => ({
+      listTasks: vi.fn().mockResolvedValue({
+        tasks: [
+          { dart_id: 'q1', title: 'Q1', status: 'Todo', dartboard: 'db1', tags: [], assignees: [] },
+          { dart_id: 'q2', title: 'Q2', status: 'Todo', dartboard: 'db1', tags: [], assignees: [] },
+          { dart_id: 'q3', title: 'Q3', status: 'Todo', dartboard: 'db1', tags: [], assignees: [] },
+          { dart_id: 'q4', title: 'Q4', status: 'Todo', dartboard: 'db1', tags: [], assignees: [] },
+          { dart_id: 'q5', title: 'Q5', status: 'Todo', dartboard: 'db1', tags: [], assignees: [] },
+        ],
+        total: 5,
+      }),
+    }));
+
+    const input: LoopSnapshotInput = { dartboard: 'Personal/agnt', queue_limit: 2 };
+    const result = await handleDartaiLoopSnapshot(input);
+    expect(result.queue.length).toBe(2);
+    expect(result.queue.map((t) => t.dart_id)).toEqual(['q1', 'q2']);
+  });
 });
