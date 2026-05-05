@@ -443,6 +443,36 @@ export interface ListTasksOutput {
 }
 
 // ============================================================================
+// Loop Snapshot Types (dartai_loop_snapshot)
+// ============================================================================
+
+export interface TaskSummary {
+  dart_id: string;
+  title: string;
+  status: string;
+  tags: string[];
+  assignees: string[];
+}
+
+export interface LoopSnapshotInput {
+  dartboard: string;
+  runner_dart_id?: string;
+  queue_limit?: number;
+}
+
+export interface LoopSnapshotOutput {
+  dartboard_id: string;
+  config: {
+    statuses: string[];
+    assignees: { dart_id: string; email: string }[];
+  };
+  queue: TaskSummary[];
+  runner_claimed: TaskSummary[];
+  blocked: TaskSummary[];
+  fetched_at: string;
+}
+
+// ============================================================================
 // Batch Operation Types
 // ============================================================================
 
