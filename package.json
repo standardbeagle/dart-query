@@ -32,7 +32,7 @@
   "bugs": {
     "url": "https://github.com/standardbeagle/dart-query/issues"
   },
-  "homepage": "https://github.com/standardbeagle/dart-query#readme",
+  "homepage": "https://standardbeagle.github.io/dart-query/",
   "keywords": [
     "mcp",
     "dart",
@@ -43,7 +43,10 @@
     "batch-operations",
     "dartql",
     "context-efficiency",
-    "csv-import"
+    "csv-import",
+    "agent-loop",
+    "dartai-loop-snapshot",
+    "ai-task-automation"
   ],
   "author": "StandardBeagle",
   "license": "MIT",
