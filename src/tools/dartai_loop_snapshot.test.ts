@@ -29,6 +29,15 @@ import type { LoopSnapshotInput } from '../types/index.js';
 describe('dartai_loop_snapshot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.DART_TOKEN = 'dsa_test_token';
+  });
+
+  it('throws DartAPIError(401) when DART_TOKEN is missing', async () => {
+    delete process.env.DART_TOKEN;
+    const input: LoopSnapshotInput = { dartboard: 'Personal/agnt', queue_limit: 20 };
+    await expect(handleDartaiLoopSnapshot(input)).rejects.toThrow(
+      /DART_TOKEN environment variable is required/,
+    );
   });
 
   it('returns dartboard_id, config, queue, runner_claimed, and blocked in single call', async () => {

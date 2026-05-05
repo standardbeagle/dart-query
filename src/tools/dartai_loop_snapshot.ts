@@ -12,6 +12,7 @@
 
 import { DartClient } from '../api/dartClient.js';
 import { configCache } from '../cache/configCache.js';
+import { DartAPIError } from '../types/index.js';
 import type {
   DartBoard,
   DartStatus,
@@ -57,10 +58,21 @@ export async function handleDartaiLoopSnapshot(
 ): Promise<LoopSnapshotOutput> {
   const queueLimit = input.queue_limit ?? 20;
 
+  const DART_TOKEN = process.env.DART_TOKEN;
+
+  if (!DART_TOKEN) {
+    throw new DartAPIError(
+      'DART_TOKEN environment variable is required. Get your token from: https://app.dartai.com/?settings=account',
+      401
+    );
+  }
+
   // 1. Resolve config + dartboard
   const config = configCache.get();
   if (!config) {
-    throw new Error('Config cache is empty; run get_config first');
+    throw new Error(
+      'Config cache is empty; call the get_config tool first to prime the cache',
+    );
   }
   const dartboardId = resolveDartboardId(config.dartboards, input.dartboard);
   if (!dartboardId) {
@@ -68,7 +80,7 @@ export async function handleDartaiLoopSnapshot(
   }
 
   // 2. Single outbound call — fetch up to 3x queue_limit so partition has headroom
-  const client = new DartClient({ token: process.env.DART_TOKEN ?? '' });
+  const client = new DartClient({ token: DART_TOKEN });
   const apiResponse = await client.listTasks({
     dartboard: dartboardId,
     limit: queueLimit * 3,
