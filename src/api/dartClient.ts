@@ -339,6 +339,15 @@ export class DartClient {
     // Extract relationships from nested taskRelationships object if present
     const relationships = task.taskRelationships || {};
 
+    // Resolve each relationship once from any of: nested taskRelationships,
+    // direct camelCase, legacy snake_case input
+    const parent = task.parentId ?? task.parent ?? task.parent_task ?? null;
+    const subtasks = relationships.subtaskIds ?? task.subtaskIds ?? task.subtasks ?? task.subtask_ids ?? [];
+    const blockedBy = relationships.blockerIds ?? task.blockerIds ?? task.blocked_by ?? task.blocker_ids ?? [];
+    const blocks = relationships.blockingIds ?? task.blockingIds ?? task.blocks ?? task.blocking_ids ?? [];
+    const duplicates = relationships.duplicateIds ?? task.duplicateIds ?? task.duplicates ?? task.duplicate_ids ?? [];
+    const related = relationships.relatedIds ?? task.relatedIds ?? task.related ?? task.related_ids ?? [];
+
     return {
       ...task,
       dart_id: task.id || task.dart_id,
@@ -347,13 +356,20 @@ export class DartClient {
       due_at: task.dueAt ?? task.due_at,
       start_at: task.startAt ?? task.start_at,
       completed_at: task.completedAt ?? task.completed_at,
-      // Relationship fields: check taskRelationships first, then direct fields, then snake_case
-      parent_task: task.parentId ?? task.parent_task,
-      subtask_ids: relationships.subtaskIds ?? task.subtaskIds ?? task.subtask_ids ?? [],
-      blocker_ids: relationships.blockerIds ?? task.blockerIds ?? task.blocker_ids ?? [],
-      blocking_ids: relationships.blockingIds ?? task.blockingIds ?? task.blocking_ids ?? [],
-      duplicate_ids: relationships.duplicateIds ?? task.duplicateIds ?? task.duplicate_ids ?? [],
-      related_ids: relationships.relatedIds ?? task.relatedIds ?? task.related_ids ?? [],
+      // Canonical (Jira/Linear-style) names
+      parent,
+      subtasks,
+      blocked_by: blockedBy,
+      blocks,
+      duplicates,
+      related,
+      // Legacy names — deprecated, retained one minor version (removed in 0.13.0)
+      parent_task: parent ?? undefined,
+      subtask_ids: subtasks,
+      blocker_ids: blockedBy,
+      blocking_ids: blocks,
+      duplicate_ids: duplicates,
+      related_ids: related,
     };
   }
 

@@ -230,6 +230,27 @@ describe('DartClient.getTask', () => {
     expect(task.duplicate_ids).toEqual([]);
     expect(task.related_ids).toEqual(['task_005']);
   });
+
+  it('emits canonical relationship names alongside deprecated ones (dual-emit, 0.12.0)', async () => {
+    const client = createClient();
+    const task = await client.getTask('task_001');
+
+    // Canonical Jira/Linear-style names
+    expect(task.subtasks).toEqual(['task_002', 'task_003']);
+    expect(task.blocked_by).toEqual([]);
+    expect(task.blocks).toEqual(['task_004']);
+    expect(task.duplicates).toEqual([]);
+    expect(task.related).toEqual(['task_005']);
+    // parent canonical: null when API returned null parentId
+    expect(task.parent).toBeNull();
+
+    // Legacy names remain present and identical (deprecated, removed in 0.13.0)
+    expect(task.subtask_ids).toEqual(task.subtasks);
+    expect(task.blocker_ids).toEqual(task.blocked_by);
+    expect(task.blocking_ids).toEqual(task.blocks);
+    expect(task.duplicate_ids).toEqual(task.duplicates);
+    expect(task.related_ids).toEqual(task.related);
+  });
 });
 
 // ─── createTask: request body structure ───────────────────────────────────────

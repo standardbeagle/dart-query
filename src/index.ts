@@ -54,6 +54,7 @@ import { handleCreateTask } from './tools/create_task.js';
 import { handleListTasks } from './tools/list_tasks.js';
 import { handleGetTask } from './tools/get_task.js';
 import { handleUpdateTask } from './tools/update_task.js';
+import { handleLinkTasks } from './tools/link_tasks.js';
 import { handleDeleteTask } from './tools/delete_task.js';
 import { handleBatchUpdateTasks } from './tools/batch_update_tasks.js';
 import { handleBatchDeleteTasks } from './tools/batch_delete_tasks.js';
@@ -200,7 +201,8 @@ class DartQueryServer {
         // Task CRUD
         {
           name: 'create_task',
-          description: 'Create a new task with title, description, status, priority, size, dates, dartboard, assignees, tags, and task relationships (subtasks, blockers, related tasks)',
+          description:
+            'Create a new task with title, description, status, priority, size, dates, dartboard, assignees, tags, and task relationships. Relationship fields accept industry-standard names (parent, subtasks, blocked_by, blocks, duplicates, related) preferred over deprecated legacy names (parent_task, subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids — removed in 0.13.0). Setting any relationship auto-mirrors the inverse side on the related task (e.g. parent → parent.subtasks). DO NOT encode dependencies as tags like "needs:T-42" or "blocks:T-99" — those are rejected; use the blocked_by / blocks arrays. Returns mirror_applied (inverse-side tasks patched) and mirror_warnings on failure.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -246,34 +248,63 @@ class DartQueryServer {
                 type: 'string',
                 description: 'Start date (ISO8601)',
               },
+              parent: {
+                type: 'string',
+                description: 'Parent task dart_id (canonical name; alias: parent_task).',
+              },
+              subtasks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of child tasks (canonical name; alias: subtask_ids). Auto-mirrors: each child gets parent=this.',
+              },
+              blocked_by: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of tasks blocking this one (canonical name; aliases: blocker_ids, depends_on). Auto-mirrors: each gets blocks+=this.',
+              },
+              blocks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of tasks this one blocks (canonical name; alias: blocking_ids). Auto-mirrors: each gets blocked_by+=this.',
+              },
+              duplicates: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of duplicate tasks (canonical name; alias: duplicate_ids). Bidirectional mirror.',
+              },
+              related: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of related (loosely connected) tasks (canonical name; alias: related_ids). Bidirectional mirror.',
+              },
               parent_task: {
                 type: 'string',
-                description: 'Parent task dart_id for subtasks',
+                description: '[Deprecated, removed 0.13.0] Use `parent`.',
               },
               subtask_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of tasks that are subtasks (children) of this task. Each ID must be a valid dart_id format.',
+                description: '[Deprecated, removed 0.13.0] Use `subtasks`.',
               },
               blocker_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of tasks that block this task from being started or completed. Each ID must be a valid dart_id format.',
+                description: '[Deprecated, removed 0.13.0] Use `blocked_by`.',
               },
               blocking_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of tasks that this task is blocking. Each ID must be a valid dart_id format.',
+                description: '[Deprecated, removed 0.13.0] Use `blocks`.',
               },
               duplicate_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of tasks that are duplicates of this task. Each ID must be a valid dart_id format.',
+                description: '[Deprecated, removed 0.13.0] Use `duplicates`.',
               },
               related_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of tasks that are related to this task (loosely connected). Each ID must be a valid dart_id format.',
+                description: '[Deprecated, removed 0.13.0] Use `related`.',
               },
               comment: {
                 type: 'string',
@@ -370,7 +401,8 @@ class DartQueryServer {
         },
         {
           name: 'update_task',
-          description: 'Update a task. Pass dart_id and any fields to change at the top level. Supports add_to/remove_from for incremental relationship changes and optional comment. Relationship arrays use full replacement unless using add_to/remove_from.',
+          description:
+            'Update a task. Pass dart_id and any fields to change at the top level. Supports add_to/remove_from for incremental relationship changes and optional comment. Relationship arrays use full replacement unless using add_to/remove_from. Relationship fields accept industry-standard names (parent, subtasks, blocked_by, blocks, duplicates, related) — the legacy _ids-suffixed names are deprecated and removed in 0.13.0. Setting any relationship auto-mirrors the inverse side on the related task; mirror_applied / mirror_warnings appear in the response.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -420,34 +452,63 @@ class DartQueryServer {
                 type: 'string',
                 description: 'Start date (ISO8601)',
               },
+              parent: {
+                type: 'string',
+                description: 'Parent task dart_id (canonical name; alias: parent_task). Auto-mirrors to parent.subtasks.',
+              },
+              subtasks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of child tasks (canonical name; alias: subtask_ids). Full replacement: [] to clear. Auto-mirrors child.parent.',
+              },
+              blocked_by: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of tasks blocking this one (canonical name; aliases: blocker_ids, depends_on). Full replacement. Auto-mirrors blocker.blocks.',
+              },
+              blocks: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of tasks this one blocks (canonical name; alias: blocking_ids). Full replacement. Auto-mirrors blocked.blocked_by.',
+              },
+              duplicates: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of duplicate tasks (canonical name; alias: duplicate_ids). Full replacement. Bidirectional mirror.',
+              },
+              related: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'dart_ids of related tasks (canonical name; alias: related_ids). Full replacement. Bidirectional mirror.',
+              },
               parent_task: {
                 type: 'string',
-                description: 'Parent task dart_id',
+                description: '[Deprecated, removed 0.13.0] Use `parent`.',
               },
               subtask_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of subtask (child) tasks. Full replacement: set to [] to clear.',
+                description: '[Deprecated, removed 0.13.0] Use `subtasks`.',
               },
               blocker_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of tasks that block this task. Full replacement: set to [] to clear.',
+                description: '[Deprecated, removed 0.13.0] Use `blocked_by`.',
               },
               blocking_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of tasks this task blocks. Full replacement: set to [] to clear.',
+                description: '[Deprecated, removed 0.13.0] Use `blocks`.',
               },
               duplicate_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of duplicate tasks. Full replacement: set to [] to clear.',
+                description: '[Deprecated, removed 0.13.0] Use `duplicates`.',
               },
               related_ids: {
                 type: 'array',
                 items: { type: 'string' },
-                description: 'IDs of related tasks. Full replacement: set to [] to clear.',
+                description: '[Deprecated, removed 0.13.0] Use `related`.',
               },
               comment: {
                 type: 'string',
@@ -491,6 +552,33 @@ class DartQueryServer {
               },
             },
             required: ['dart_id'],
+          },
+        },
+        {
+          name: 'link_tasks',
+          description:
+            'Atomically link two or more tasks with a typed relationship. Writes BOTH sides of the link (e.g. parent.subtasks and child.parent_task) so the graph is never one-sided — the failure mode planners hit when setting parent_task on a child without updating the parent. Prefer this over manually editing relationship arrays on both sides. Returns mirror_applied (inverse tasks patched) and mirror_warnings (inverse-side failures, if any).',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              type: {
+                type: 'string',
+                enum: ['parent', 'subtasks', 'blocks', 'blocked_by', 'duplicates', 'related'],
+                description:
+                  'Relationship verb. "parent" (anchor has parent=to[0]), "subtasks" (anchor has children to[]), "blocks" (anchor blocks to[]), "blocked_by" (anchor blocked by to[]), "duplicates"/"related" (bidirectional).',
+              },
+              from: {
+                type: 'string',
+                description: 'Anchor task dart_id — the task the relationship is being added to.',
+              },
+              to: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'Target task dart_ids. Length must be 1 for type="parent"; arbitrary length for all other types.',
+              },
+            },
+            required: ['type', 'from', 'to'],
           },
         },
 
@@ -1063,6 +1151,18 @@ class DartQueryServer {
 
           case 'delete_task': {
             const result = await handleDeleteTask((args || {}) as any);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'link_tasks': {
+            const result = await handleLinkTasks((args || {}) as any);
             return {
               content: [
                 {

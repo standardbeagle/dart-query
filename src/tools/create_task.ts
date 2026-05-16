@@ -18,6 +18,8 @@ import {
   getDartboardNames,
   getStatusNames,
 } from '../types/index.js';
+import { normalizeRelationshipInput, assertNoPseudoEdgeTags } from '../api/relationshipNormalizer.js';
+import { applyAdditiveMirror } from './relationshipMirror.js';
 
 /**
  * Handle create_task tool calls
@@ -60,6 +62,11 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
     // Silently unwrap - LLM used { item: { title, dartboard, ... } } instead of flat params
     input = rawInput.item as CreateTaskInput;
   }
+
+  // Normalize relationship-field aliases (parent → parent_task, subtasks → subtask_ids,
+  // blocked_by → blocker_ids, blocks → blocking_ids, etc.) so callers can use either
+  // Jira/Linear-style canonical names or legacy snake_case identically.
+  input = normalizeRelationshipInput(input as unknown as Record<string, unknown>) as unknown as CreateTaskInput;
 
   if (!input.title || typeof input.title !== 'string' || input.title.trim() === '') {
     throw new ValidationError(
@@ -217,6 +224,11 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   validateRelationshipIds(input.duplicate_ids, 'duplicate_ids');
   validateRelationshipIds(input.related_ids, 'related_ids');
 
+  // Reject pseudo-edge tags like ["needs:X", "blocks:Y"] — those don't link
+  // tasks in Dart and silently lose dependency info. Point caller at the
+  // correct relationship field.
+  assertNoPseudoEdgeTags(input.tags, ValidationError);
+
   // ============================================================================
   // Step 10: Validate dates (if provided)
   // ============================================================================
@@ -277,7 +289,25 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   const url = (createdTask as any).htmlUrl || `https://app.dartai.com/task/${taskWithDartId.dart_id}`;
 
   // ============================================================================
-  // Step 13: Add optional comment (non-blocking)
+  // Step 13: Auto-mirror inverse-side relationships
+  //
+  // Dart's API doesn't auto-mirror parent↔subtask, blocker↔blocking, or the
+  // symmetric duplicate/related links. Most PM tools do. We restore the
+  // intuition here: patch the inverse side so the graph is bidirectionally
+  // consistent. Best-effort — failures attach to the response as warnings,
+  // never fail the create.
+  // ============================================================================
+  const mirror = await applyAdditiveMirror(client, taskWithDartId.dart_id, {
+    parent_task: input.parent_task,
+    subtask_ids: input.subtask_ids,
+    blocker_ids: input.blocker_ids,
+    blocking_ids: input.blocking_ids,
+    duplicate_ids: input.duplicate_ids,
+    related_ids: input.related_ids,
+  });
+
+  // ============================================================================
+  // Step 14: Add optional comment (non-blocking)
   // ============================================================================
   let comment_added: boolean | undefined;
   if (input.comment && input.comment.trim()) {
@@ -290,7 +320,7 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
   }
 
   // ============================================================================
-  // Step 14: Return CreateTaskOutput
+  // Step 15: Return CreateTaskOutput
   // ============================================================================
   return {
     dart_id: taskWithDartId.dart_id,
@@ -299,5 +329,7 @@ export async function handleCreateTask(input: CreateTaskInput): Promise<CreateTa
     created_at: taskWithDartId.created_at,
     all_fields: taskWithDartId,
     ...(comment_added !== undefined && { comment_added }),
+    ...(mirror.warnings.length > 0 && { mirror_warnings: mirror.warnings }),
+    ...(mirror.mirrored.length > 0 && { mirror_applied: mirror.mirrored }),
   };
 }

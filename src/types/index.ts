@@ -12,36 +12,51 @@
  * All relationship fields are optional arrays of task dart_ids.
  * These relationships allow tasks to be connected in various ways
  * to model dependencies, duplicates, and related work items.
+ *
+ * Canonical names follow Jira/Linear conventions: `subtasks`, `blocked_by`,
+ * `blocks`, `duplicates`, `related`. The legacy `_ids`-suffixed names remain
+ * for one minor version and will be removed in the next breaking release.
  */
 export interface TaskRelationships {
   /**
    * IDs of tasks that are subtasks (children) of this task.
    * Subtasks represent work that is part of completing the parent task.
    */
-  subtask_ids?: string[];
+  subtasks?: string[];
 
   /**
    * IDs of tasks that block this task from being started or completed.
    * This task cannot proceed until all blocker tasks are resolved.
    */
-  blocker_ids?: string[];
+  blocked_by?: string[];
 
   /**
    * IDs of tasks that this task is blocking.
    * Those tasks cannot proceed until this task is resolved.
    */
-  blocking_ids?: string[];
+  blocks?: string[];
 
   /**
    * IDs of tasks that are duplicates of this task.
    * Duplicate tasks represent the same work item created multiple times.
    */
-  duplicate_ids?: string[];
+  duplicates?: string[];
 
   /**
    * IDs of tasks that are related to this task.
    * Related tasks are loosely connected but not dependencies or duplicates.
    */
+  related?: string[];
+
+  /** @deprecated Use `subtasks`. Removed in 0.13.0. */
+  subtask_ids?: string[];
+  /** @deprecated Use `blocked_by`. Removed in 0.13.0. */
+  blocker_ids?: string[];
+  /** @deprecated Use `blocks`. Removed in 0.13.0. */
+  blocking_ids?: string[];
+  /** @deprecated Use `duplicates`. Removed in 0.13.0. */
+  duplicate_ids?: string[];
+  /** @deprecated Use `related`. Removed in 0.13.0. */
   related_ids?: string[];
 }
 
@@ -66,6 +81,9 @@ export interface DartTask extends TaskRelationships {
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  /** ID of parent task (canonical name). */
+  parent?: string | null;
+  /** @deprecated Use `parent`. Removed in 0.13.0. */
   parent_task?: string;
   url?: string;
 }
@@ -313,6 +331,17 @@ export interface CreateTaskOutput {
   created_at: string;
   all_fields: DartTask;
   comment_added?: boolean;
+  /**
+   * IDs of tasks whose inverse-side relationships were auto-patched after
+   * this create. e.g. setting `parent: P` causes `P.subtasks` to be updated;
+   * `P` would appear here.
+   */
+  mirror_applied?: string[];
+  /**
+   * Human-readable warnings for inverse-side patches that failed. Non-empty
+   * means the graph is asymmetric — the primary task was still created.
+   */
+  mirror_warnings?: string[];
 }
 
 export interface GetTaskInput {
@@ -398,6 +427,51 @@ export interface UpdateTaskOutput {
   task: DartTask;
   url: string;
   comment_added?: boolean;
+  /** Surfaced when a comment was attempted but failed (update itself succeeded) */
+  comment_error?: string;
+  /**
+   * IDs of inverse-side tasks whose relationships were auto-patched after
+   * this update — e.g. changing `parent` from P1 to P2 patches both
+   * `P1.subtasks` and `P2.subtasks`.
+   */
+  mirror_applied?: string[];
+  /**
+   * Warnings for inverse-side patches that failed. Non-empty means the
+   * graph is asymmetric — the primary update still succeeded.
+   */
+  mirror_warnings?: string[];
+}
+
+/**
+ * Atomic bidirectional task-link verb input.
+ *
+ * Maps onto Linear's issueRelationCreate semantics: pick a relationship
+ * type, point `from` at the anchor task, list one or more targets in `to`.
+ * The dart-query auto-mirror layer writes both sides of the relationship
+ * in a single call so callers cannot accidentally leave the graph
+ * asymmetric (a common LLM failure mode).
+ */
+export interface LinkTasksInput {
+  /** Relationship verb */
+  type: 'parent' | 'subtasks' | 'blocks' | 'blocked_by' | 'duplicates' | 'related';
+  /** Anchor task — the dart_id the relationship is being added to */
+  from: string;
+  /**
+   * Target dart_ids. Must be length 1 for `type: "parent"`; arbitrary
+   * length for all other types.
+   */
+  to: string[];
+}
+
+export interface LinkTasksOutput {
+  from: string;
+  type: LinkTasksInput['type'];
+  to: string[];
+  url: string;
+  /** Inverse-side task IDs that were auto-mirrored */
+  mirror_applied: string[];
+  /** Warnings for inverse-side patches that failed (best-effort mirror) */
+  mirror_warnings: string[];
 }
 
 export interface DeleteTaskInput {

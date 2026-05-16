@@ -32,6 +32,8 @@ import {
   RELATIONSHIP_FIELDS,
   RelationshipField,
 } from '../types/index.js';
+import { normalizeRelationshipInput, assertNoPseudoEdgeTags } from '../api/relationshipNormalizer.js';
+import { applyDiffMirror, type RelationshipSnapshot } from './relationshipMirror.js';
 
 /** Fields that are valid update fields (everything except identifiers/timestamps) */
 const VALID_UPDATE_FIELDS = new Set([
@@ -41,7 +43,15 @@ const VALID_UPDATE_FIELDS = new Set([
   'comment', 'add_to', 'remove_from',
 ]);
 
-/** Common parameter mistakes LLMs make, mapped to the correct field */
+/**
+ * Hard mistakes — wrong field names that have a single obvious target.
+ * These still throw a corrective error because the input clearly meant
+ * something else (not a stylistic synonym).
+ *
+ * Relationship-name aliases (parent, subtasks, blocked_by, blocks, etc.)
+ * are handled by `normalizeRelationshipInput` upstream and never reach
+ * this map.
+ */
 const FIELD_CORRECTIONS: Record<string, string> = {
   task_id: 'dart_id',
   id: 'dart_id',
@@ -55,14 +65,6 @@ const FIELD_CORRECTIONS: Record<string, string> = {
   dueDate: 'due_at',
   start_date: 'start_at',
   startDate: 'start_at',
-  parent: 'parent_task',
-  parentId: 'parent_task',
-  parent_id: 'parent_task',
-  blockers: 'blocker_ids',
-  blocking: 'blocking_ids',
-  subtasks: 'subtask_ids',
-  duplicates: 'duplicate_ids',
-  related: 'related_ids',
   // Detect old nested format
   updates: 'NESTED_UPDATES',
 };
@@ -104,8 +106,14 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     );
   }
 
+  // Normalize relationship-field aliases (parent, subtasks, blocked_by, etc.)
+  // → legacy internal names (parent_task, subtask_ids, ...) so the rest of the
+  // handler doesn't branch on surface naming. Replaces `input` in-place.
+  const normalized = normalizeRelationshipInput(input as unknown as Record<string, unknown>);
+  input = normalized as unknown as UpdateTaskInput;
+
   // Accept id, task_id, or taskId as aliases for dart_id
-  const rawInput = input as unknown as Record<string, unknown>;
+  const rawInput = normalized;
   input.dart_id = resolveDartId(rawInput);
 
   // Detect misspelled field names and suggest corrections
@@ -128,6 +136,15 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   // Step 2: Extract update fields (everything except dart_id)
   // ============================================================================
+  // Normalize relationship-field aliases inside add_to / remove_from too,
+  // so callers can write `add_to: { blocked_by: [...] }` instead of `blocker_ids`.
+  if (input.add_to && typeof input.add_to === 'object') {
+    input.add_to = normalizeRelationshipInput(input.add_to as Record<string, unknown>) as typeof input.add_to;
+  }
+  if (input.remove_from && typeof input.remove_from === 'object') {
+    input.remove_from = normalizeRelationshipInput(input.remove_from as Record<string, unknown>) as typeof input.remove_from;
+  }
+
   const { dart_id, comment, add_to, remove_from, ...updateFields } = input;
 
   // Validate comment if provided
@@ -349,6 +366,9 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       );
     }
 
+    // Reject pseudo-edge tags ("needs:X", "blocks:Y", etc.) before resolving.
+    assertNoPseudoEdgeTags(updateFields.tags, ValidationError);
+
     if (updateFields.tags.length > 0) {
       const resolvedTags: string[] = [];
       for (const tagInput of updateFields.tags) {
@@ -486,15 +506,31 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   // ============================================================================
   const client = new DartClient({ token: DART_TOKEN });
 
-  if (hasAddRemoveOps) {
-    const currentTask = await client.getTask(dart_id);
+  // Identify which relationship fields this update touches. Used both for
+  // resolving add_to/remove_from and for capturing the "before" snapshot
+  // needed by the auto-mirror diff. parent_task is a scalar, the rest arrays.
+  const touchedRelationshipFields = new Set<string>();
+  for (const f of RELATIONSHIP_FIELDS) {
+    if (resolvedUpdates[f] !== undefined) touchedRelationshipFields.add(f);
+  }
+  if (resolvedUpdates.parent_task !== undefined) touchedRelationshipFields.add('parent_task');
+  if (add_to) Object.keys(add_to).forEach((f) => touchedRelationshipFields.add(f));
+  if (remove_from) Object.keys(remove_from).forEach((f) => touchedRelationshipFields.add(f));
 
+  // Pre-fetch current task once when relationships are touched. Reused for
+  // both add_to/remove_from resolution and the mirror "before" snapshot.
+  let currentTask: DartTask | undefined;
+  if (hasAddRemoveOps || touchedRelationshipFields.size > 0) {
+    currentTask = await client.getTask(dart_id);
+  }
+
+  if (hasAddRemoveOps && currentTask) {
     // Collect all relationship fields touched by add_to/remove_from
-    const touchedFields = new Set<RelationshipField>();
-    if (add_to) Object.keys(add_to).forEach(f => touchedFields.add(f as RelationshipField));
-    if (remove_from) Object.keys(remove_from).forEach(f => touchedFields.add(f as RelationshipField));
+    const opFields = new Set<RelationshipField>();
+    if (add_to) Object.keys(add_to).forEach(f => opFields.add(f as RelationshipField));
+    if (remove_from) Object.keys(remove_from).forEach(f => opFields.add(f as RelationshipField));
 
-    for (const field of touchedFields) {
+    for (const field of opFields) {
       const current = (currentTask[field] as string[] | undefined) ?? [];
       let merged = [...current];
 
@@ -517,6 +553,16 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
       if (!updatedFields.includes(field)) updatedFields.push(field);
     }
   }
+
+  // Snapshot "before" relationships from pre-fetched currentTask
+  const beforeSnapshot: RelationshipSnapshot | undefined = currentTask && {
+    parent_task: currentTask.parent_task ?? null,
+    subtask_ids: currentTask.subtask_ids ?? [],
+    blocker_ids: currentTask.blocker_ids ?? [],
+    blocking_ids: currentTask.blocking_ids ?? [],
+    duplicate_ids: currentTask.duplicate_ids ?? [],
+    related_ids: currentTask.related_ids ?? [],
+  };
 
   // ============================================================================
   // Step 16: Call DartClient.updateTask() (skip if comment-only)
@@ -549,6 +595,36 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
   }
 
   // ============================================================================
+  // Step 16.5: Auto-mirror inverse-side relationship changes
+  //
+  // Same intent as create-side mirror: keep parent↔subtask, blocker↔blocking,
+  // duplicate, related links bidirectionally consistent. Diff before/after
+  // and patch the inverse side per change. Best-effort; warnings surface in
+  // output but do not fail the update.
+  // ============================================================================
+  let mirrorApplied: string[] = [];
+  let mirrorWarnings: string[] = [];
+  if (beforeSnapshot && touchedRelationshipFields.size > 0) {
+    const afterSnapshot: RelationshipSnapshot = {
+      parent_task: updatedTask.parent_task ?? null,
+      subtask_ids: updatedTask.subtask_ids ?? [],
+      blocker_ids: updatedTask.blocker_ids ?? [],
+      blocking_ids: updatedTask.blocking_ids ?? [],
+      duplicate_ids: updatedTask.duplicate_ids ?? [],
+      related_ids: updatedTask.related_ids ?? [],
+    };
+    const mirror = await applyDiffMirror(
+      client,
+      updatedTask.dart_id,
+      beforeSnapshot,
+      afterSnapshot,
+      touchedRelationshipFields
+    );
+    mirrorApplied = mirror.mirrored;
+    mirrorWarnings = mirror.warnings;
+  }
+
+  // ============================================================================
   // Step 17: Add comment if provided (non-blocking — update already succeeded)
   // ============================================================================
   let commentAdded: boolean | undefined;
@@ -575,5 +651,7 @@ export async function handleUpdateTask(input: UpdateTaskInput): Promise<UpdateTa
     url: deepLinkUrl,
     ...(commentAdded !== undefined && { comment_added: commentAdded }),
     ...(commentError !== undefined && { comment_error: commentError }),
+    ...(mirrorApplied.length > 0 && { mirror_applied: mirrorApplied }),
+    ...(mirrorWarnings.length > 0 && { mirror_warnings: mirrorWarnings }),
   };
 }

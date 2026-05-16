@@ -161,6 +161,12 @@ get_config({ cache_bust: true })
 
 ## Task CRUD Operations
 
+> **Relationship field naming (0.12.0+):** `create_task`, `update_task`, and `link_tasks` accept industry-standard Jira/Linear-style names — `parent`, `subtasks`, `blocked_by`, `blocks`, `duplicates`, `related` — alongside the legacy `_ids`-suffixed names. Responses dual-emit both shapes. **The legacy names are deprecated and will be removed in 0.13.0.** Prefer the canonical names in new code.
+>
+> **Auto-mirror (0.12.0+):** Setting a relationship on one side automatically patches the inverse side. Setting `parent: P` on a child also updates `P.subtasks`. Setting `blocked_by: [B]` also updates `B.blocks`. Best-effort — failures surface in `mirror_warnings` on the response, never fail the primary write.
+>
+> **Pseudo-edge tags rejected:** Tags like `"needs:T-42"`, `"blocks:T-99"`, `"blocked-by:..."` are rejected with a corrective error pointing at the right relationship field. Use relationship arrays, not tag prefixes.
+
 ### `create_task` - Create Single Task
 
 **Purpose:** Create a new task with all metadata.
@@ -175,17 +181,25 @@ get_config({ cache_bust: true })
   priority?: string                // "critical", "high", "medium", "low"
   size?: string                    // "xs", "small", "medium", "large", "xl"
   assignees?: string[]             // email addresses or names
-  tags?: string[]                  // tag names
+  tags?: string[]                  // tag names (no "needs:X"/"blocks:Y" — use relationship fields)
   due_at?: string                  // ISO8601 date (e.g., "2026-02-01T00:00:00Z")
   start_at?: string                // ISO8601 date
-  parent_task?: string             // parent task dart_id
 
-  // Relationship fields (arrays of dart_id strings)
-  subtask_ids?: string[]           // IDs of subtask (child) tasks
-  blocker_ids?: string[]           // IDs of tasks that block this task
-  blocking_ids?: string[]          // IDs of tasks blocked by this task
-  duplicate_ids?: string[]         // IDs of duplicate tasks
-  related_ids?: string[]           // IDs of related tasks
+  // Relationship fields — canonical names (preferred)
+  parent?: string                  // parent task dart_id
+  subtasks?: string[]              // child task dart_ids
+  blocked_by?: string[]            // dart_ids of tasks blocking this one
+  blocks?: string[]                // dart_ids of tasks this one blocks
+  duplicates?: string[]            // dart_ids of duplicate tasks
+  related?: string[]               // dart_ids of related tasks
+
+  // Legacy names (deprecated, removed in 0.13.0) — all accepted interchangeably
+  parent_task?: string
+  subtask_ids?: string[]
+  blocker_ids?: string[]
+  blocking_ids?: string[]
+  duplicate_ids?: string[]
+  related_ids?: string[]
 }
 ```
 
@@ -464,6 +478,57 @@ update_task({
 ```
 
 **Important:** To add a single relationship without losing existing ones, first retrieve the current task with `get_task`, then include all existing IDs plus the new one in the update.
+
+---
+
+### `link_tasks` - Atomic Bidirectional Relationship Linker
+
+**Purpose:** Add a typed relationship between tasks, writing both sides of the link in one call. Prevents the common one-sided-graph failure mode where a planner sets `parent_task` on a child without updating the parent's `subtasks`.
+
+Maps onto Linear's `issueRelationCreate` semantics. Internally delegates to `update_task`, so synonym normalization, pseudo-edge tag rejection, and auto-mirror diff logic apply transparently.
+
+**Input Schema:**
+```typescript
+{
+  type: 'parent' | 'subtasks' | 'blocks' | 'blocked_by' | 'duplicates' | 'related'
+  from: string         // anchor task dart_id
+  to: string[]         // target task dart_ids — length must be 1 for type='parent'
+}
+```
+
+**Semantics:**
+- `parent`: anchor gets `parent = to[0]`; `to[0].subtasks += anchor` (auto-mirror)
+- `subtasks`: anchor's subtasks += `to[]`; each `to[i].parent = anchor` (auto-mirror)
+- `blocks`: anchor's blocks += `to[]`; each `to[i].blocked_by += anchor` (auto-mirror)
+- `blocked_by`: anchor's blocked_by += `to[]`; each `to[i].blocks += anchor` (auto-mirror)
+- `duplicates` / `related`: bidirectional symmetric mirror
+
+**Output Schema:**
+```typescript
+{
+  from: string
+  type: string
+  to: string[]
+  url: string
+  mirror_applied: string[]    // inverse-side tasks successfully patched
+  mirror_warnings: string[]   // inverse-side patches that failed (best-effort)
+}
+```
+
+**Examples:**
+
+```typescript
+// Attach two subtasks to a parent — both sides linked in one call
+link_tasks({ type: 'subtasks', from: 'duid_parent', to: ['duid_a', 'duid_b'] })
+
+// Express a dependency
+link_tasks({ type: 'blocks', from: 'duid_setup', to: ['duid_feat1', 'duid_feat2'] })
+
+// Set parent on an existing task
+link_tasks({ type: 'parent', from: 'duid_child', to: ['duid_epic'] })
+```
+
+**Why this exists:** Dart's API does not auto-mirror parent↔subtask or blocker↔blocking. Most PM tools (Jira, Linear, Asana, ClickUp, GitHub sub-issues) do. `link_tasks` restores that intuition with a single verb. Use this over hand-rolling bidirectional updates.
 
 ---
 

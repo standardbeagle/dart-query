@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-05-16
+
+### Added
+- **Industry-standard relationship field names** — task responses now emit canonical Jira/Linear-style names (`parent`, `subtasks`, `blocked_by`, `blocks`, `duplicates`, `related`) alongside the legacy `_ids` / `parent_task` shape. LLMs writing the names they already know from PM-tool training corpus now produce valid input. Legacy names are deprecated and will be removed in **0.13.0**.
+- **Input synonym normalization** — `create_task` and `update_task` accept either canonical or legacy field names interchangeably (`parent` ↔ `parent_task`, `subtasks` ↔ `subtask_ids`, `blocked_by` ↔ `blocker_ids`, `blocks` ↔ `blocking_ids`, plus common camelCase / hyphenated variants). Internal contract still uses the legacy names; surface is symmetric.
+- **Auto-mirrored inverse relationships** — `create_task` and `update_task` now patch the inverse side of every relationship change so the graph stays bidirectionally consistent without the caller having to set both sides. Setting `parent_task: P` on a child auto-patches `P.subtask_ids`; setting `blocker_ids: [B]` auto-patches `B.blocking_ids`; duplicates/related mirror bidirectionally. Best-effort — failures surface in new `mirror_warnings` / `mirror_applied` response fields, never fail the primary write.
+- **`link_tasks` tool** — atomic bidirectional relationship verb. One call writes both sides via the auto-mirror path. Verbs: `parent`, `subtasks`, `blocks`, `blocked_by`, `duplicates`, `related`. Maps onto Linear's `issueRelationCreate` mental model.
+- **Pseudo-edge tag rejection** — tags matching `^(needs|depends-on|blocked-by|blocks|parent|child|subtask|duplicate|related):` are now rejected at input time with a corrective error pointing at the correct relationship field. Prevents the common GitHub Actions / Jira label muscle-memory pattern (`tags: ["needs:T-42"]`) from silently dropping dependency info.
+
+### Deprecated
+- Legacy `_ids`-suffixed relationship field names (`subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`) and `parent_task` on response payloads. Use `subtasks`, `blocked_by`, `blocks`, `duplicates`, `related`, `parent`. Legacy names will be removed in 0.13.0.
+
 ## [0.11.0] - 2026-05-05
 
 ### Added
