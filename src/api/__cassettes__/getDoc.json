@@ -1,0 +1,25 @@
+{
+  "name": "getDoc",
+  "recorded_at": "2026-06-09T00:00:00.000Z",
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "endpoint": "/api/v0/public/docs/doc_001"
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "item": {
+            "id": "doc_001",
+            "htmlUrl": "https://app.dartai.com/doc/doc_001",
+            "title": "Licensing",
+            "folder": "Personal/stuff",
+            "text": "Full content."
+          }
+        }
+      }
+    }
+  ]
+}

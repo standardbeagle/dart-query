@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-06-09
+
+### Fixed
+- **`update_doc` 405 error** — `DartClient.updateDoc` used `PATCH /docs/{id}` with a bare body; the Dart public API rejects PATCH (405 Method Not Allowed) and expects `PUT /docs/{id}` with the payload wrapped in `{ item: { id, ...fields } }` (the `id` is required inside `item`). Now mirrors the `update_task` contract. Updating docs via API works again.
+- **`get_doc` returned an unmapped wrapper** — `DartClient.getDoc` returned the raw `{ item: {...} }` envelope typed as a `DartDoc`, so `doc_id` / `url` were `undefined` and the generated deep link was broken. Now unwraps `response.item`.
+- **Doc field mapping** — `createDoc`, `getDoc`, `updateDoc`, and `listDocs` now share a single `mapDocResponse` helper. The API doc item exposes `htmlUrl` (camelCase, no timestamp fields); the previous mapping read non-existent `url` / `created_at` keys, so `url` was always `undefined`. `url` is now populated from `htmlUrl`, and `listDocs` results carry a real `doc_id`.
+
 ## [0.12.0] - 2026-05-16
 
 ### Added

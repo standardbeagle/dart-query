@@ -470,8 +470,25 @@ export class DartClient {
 
     const response = await this.request<{ count: number; results: any[] }>('GET', endpoint);
     return {
-      docs: response.results || [],
+      docs: (response.results || []).map((item) => this.mapDocResponse(item)),
       total: response.count || 0,
+    };
+  }
+
+  /**
+   * Map a raw API doc item to a DartDoc.
+   * API item shape: { id, htmlUrl, title, folder, text }.
+   */
+  private mapDocResponse(item: any): DartDoc {
+    return {
+      doc_id: item?.id || '',
+      title: item?.title || '',
+      text: item?.text || '',
+      folder: item?.folder,
+      folder_id: item?.folderId ?? item?.folder_id,
+      created_at: item?.createdAt ?? item?.created_at ?? '',
+      updated_at: item?.updatedAt ?? item?.updated_at ?? '',
+      url: item?.htmlUrl ?? item?.html_url ?? item?.url,
     };
   }
 
@@ -486,16 +503,7 @@ export class DartClient {
       throw new DartAPIError('text is required and must be a string', 400);
     }
     const response = await this.request<{ item: any }>('POST', '/docs', { item: input });
-    return {
-      doc_id: response.item?.id || '',
-      title: response.item?.title || input.title,
-      text: response.item?.text || input.text,
-      folder: response.item?.folder,
-      folder_id: response.item?.folder_id,
-      created_at: response.item?.created_at || '',
-      updated_at: response.item?.updated_at || '',
-      url: response.item?.url,
-    };
+    return this.mapDocResponse(response.item);
   }
 
   /**
@@ -505,7 +513,8 @@ export class DartClient {
     if (!docId || typeof docId !== 'string' || docId.trim() === '') {
       throw new DartAPIError('doc_id is required and must be a non-empty string', 400);
     }
-    return this.request<DartDoc>('GET', `/docs/${encodeURIComponent(docId.trim())}`);
+    const response = await this.request<{ item: any }>('GET', `/docs/${encodeURIComponent(docId.trim())}`);
+    return this.mapDocResponse(response.item);
   }
 
   /**
@@ -522,7 +531,17 @@ export class DartClient {
       throw new DartAPIError('updates is required and must be a non-empty object', 400);
     }
     const { doc_id, updates } = input;
-    return this.request<DartDoc>('PATCH', `/docs/${encodeURIComponent(doc_id.trim())}`, updates);
+    const id = doc_id.trim();
+
+    // API expects PUT /docs/{id} with body { item: { id, ...fields } }.
+    // PATCH is not allowed (405). The id is required inside item.
+    const item: Record<string, unknown> = { id };
+    if (updates.title !== undefined) item.title = updates.title;
+    if (updates.text !== undefined) item.text = updates.text;
+    if (updates.folder !== undefined) item.folder = updates.folder;
+
+    const response = await this.request<{ item: any }>('PUT', `/docs/${encodeURIComponent(id)}`, { item });
+    return this.mapDocResponse(response.item);
   }
 
   /**

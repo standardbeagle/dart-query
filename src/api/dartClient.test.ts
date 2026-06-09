@@ -414,6 +414,62 @@ describe('DartClient.listDocs - title and text search', () => {
   });
 });
 
+// ─── updateDoc: method, payload shape, response unwrap ────────────────────────
+
+describe('DartClient.updateDoc', () => {
+  const recorder = createFetchRecorder('updateDoc');
+
+  beforeEach(() => recorder.install());
+  afterEach(() => recorder.uninstall());
+  afterAll(() => recorder.save());
+
+  it('uses PUT (not PATCH) with item wrapper and unwraps response', async () => {
+    const client = createClient();
+    const doc = await client.updateDoc({
+      doc_id: 'doc_001',
+      updates: { title: 'Licensing (updated)', text: 'Use KEY and PRIVKEY placeholders.' },
+    });
+
+    // Response.item is unwrapped and mapped to DartDoc
+    expect(doc.doc_id).toBe('doc_001');
+    expect(doc.title).toBe('Licensing (updated)');
+    expect(doc.text).toBe('Use KEY and PRIVKEY placeholders.');
+    expect(doc.url).toBe('https://app.dartai.com/doc/doc_001');
+
+    const exchange = recorder.getCassette().exchanges[0];
+    // Must be PUT — PATCH returns 405 server-side
+    expect(exchange.request.method).toBe('PUT');
+    expect(exchange.request.method).not.toBe('PATCH');
+    expect(exchange.request.endpoint).toContain('/docs/doc_001');
+    // Body wrapped in item with id required inside
+    const item = (exchange.request.body as Record<string, unknown>).item as Record<string, unknown>;
+    expect(item.id).toBe('doc_001');
+    expect(item.title).toBe('Licensing (updated)');
+    expect(item.text).toBe('Use KEY and PRIVKEY placeholders.');
+  });
+});
+
+// ─── getDoc: response unwrap ──────────────────────────────────────────────────
+
+describe('DartClient.getDoc', () => {
+  const recorder = createFetchRecorder('getDoc');
+
+  beforeEach(() => recorder.install());
+  afterEach(() => recorder.uninstall());
+  afterAll(() => recorder.save());
+
+  it('unwraps response.item and maps to DartDoc (htmlUrl → url)', async () => {
+    const client = createClient();
+    const doc = await client.getDoc('doc_001');
+
+    expect(doc.doc_id).toBe('doc_001');
+    expect(doc.title).toBe('Licensing');
+    expect(doc.text).toBe('Full content.');
+    expect(doc.folder).toBe('Personal/stuff');
+    expect(doc.url).toBe('https://app.dartai.com/doc/doc_001');
+  });
+});
+
 // ─── listComments: parameter correctness ──────────────────────────────────────
 
 describe('DartClient.listComments', () => {
