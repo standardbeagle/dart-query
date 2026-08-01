@@ -3,7 +3,7 @@ import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
 
 export default defineConfig({
-  site: 'https://standardbeagle.github.io',
+  site: 'https://dev.standardbeagle.com',
   base: '/dart-query',
   integrations: [
     starlight({
