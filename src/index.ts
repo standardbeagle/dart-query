@@ -516,7 +516,7 @@ class DartQueryServer {
               },
               add_to: {
                 type: 'object',
-                description: 'Append IDs to relationship arrays. Fetches current values, merges, deduplicates. Keys: subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids',
+                description: 'Append IDs to relationship arrays. Fetches current values, merges, deduplicates. Keys accept canonical names (subtasks, blocked_by, blocks, duplicates, related) or the deprecated _ids-suffixed aliases (subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids — removed in 0.13.0).',
                 properties: {
                   subtask_ids: { type: 'array', items: { type: 'string' } },
                   blocker_ids: { type: 'array', items: { type: 'string' } },
@@ -527,7 +527,7 @@ class DartQueryServer {
               },
               remove_from: {
                 type: 'object',
-                description: 'Remove IDs from relationship arrays. Fetches current values, filters out specified IDs. Keys: subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids',
+                description: 'Remove IDs from relationship arrays. Fetches current values, filters out specified IDs. Keys accept canonical names (subtasks, blocked_by, blocks, duplicates, related) or the deprecated _ids-suffixed aliases (subtask_ids, blocker_ids, blocking_ids, duplicate_ids, related_ids — removed in 0.13.0).',
                 properties: {
                   subtask_ids: { type: 'array', items: { type: 'string' } },
                   blocker_ids: { type: 'array', items: { type: 'string' } },

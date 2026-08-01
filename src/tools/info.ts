@@ -388,7 +388,7 @@ CSV Format Guide:
     title - Task title (required)
 
   Optional Columns:
-    description, status, priority, size, assignee, dartboard, tags, due_date, start_date, parent_task
+    description, status, priority, size, assignee, dartboard, tags, due_at, start_at, parent_task
 
   Flexible Column Names (case-insensitive):
     'Title' = 'title' = 'Task Name'
@@ -396,7 +396,7 @@ CSV Format Guide:
     'Tags' = 'labels' (comma-separated)
 
 CSV Example:
-  title,description,assignee,priority,tags,due_date
+  title,description,assignee,priority,tags,due_at
   "Fix login bug","Users can't login",engineer@company.com,5,"bug,urgent",2026-02-01
   "Update docs","API documentation",writer@company.com,2,documentation,2026-02-15
 
