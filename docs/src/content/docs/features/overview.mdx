@@ -72,7 +72,7 @@ DartQL uses SQL-92 WHERE clause syntax that any developer already knows. No prop
 
 ```sql
 -- Target by dartboard and priority
-UPDATE WHERE dartboard = 'Engineering' AND priority = 'high'
+UPDATE WHERE dartboard = 'Engineering' AND priority = 4
   SET status = 'Doing'
 
 -- Pattern matching with LIKE
@@ -82,7 +82,7 @@ UPDATE WHERE title LIKE '%auth%' SET tags = ['security', 'auth']
 DELETE WHERE due_at < '2025-01-01' AND status = 'Done' CONFIRM
 
 -- Set operations
-UPDATE WHERE tags CONTAINS 'bug' AND priority IN ('critical', 'high')
+UPDATE WHERE tags CONTAINS 'bug' AND priority IN (4, 5)
   SET assignee = 'oncall@company.com'
 ```
 
@@ -94,7 +94,7 @@ Multi-statement execution lets you chain operations in a single call:
 execute_dartql({
   query: `
     UPDATE WHERE dartboard = 'Sprint 11' AND status != 'Done' SET dartboard = 'Sprint 12';
-    UPDATE WHERE dartboard = 'Sprint 12' AND priority = 'critical' SET status = 'Doing'
+    UPDATE WHERE dartboard = 'Sprint 12' AND priority = 5 SET status = 'Doing'
   `,
   dry_run: true  // preview both operations first
 })
@@ -124,14 +124,14 @@ Production task data demands careful defaults. dart-query builds safety into eve
 ```typescript
 // Step 1: Preview what will change
 execute_dartql({
-  query: "UPDATE WHERE status = 'Blocked' SET priority = 'critical'",
+  query: "UPDATE WHERE status = 'Blocked' SET priority = 5",
   dry_run: true
 })
 // Response shows matched tasks without modifying anything
 
 // Step 2: Execute after reviewing
 execute_dartql({
-  query: "UPDATE WHERE status = 'Blocked' SET priority = 'critical'",
+  query: "UPDATE WHERE status = 'Blocked' SET priority = 5",
   dry_run: false
 })
 ```

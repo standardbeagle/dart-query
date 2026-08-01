@@ -114,19 +114,19 @@ duplicate_ids IS NOT NULL
 
 ```sql
 -- High-priority blocked tasks
-blocker_ids IS NOT NULL AND priority = 'high'
+blocker_ids IS NOT NULL AND priority = 4
 
 -- Blocked tasks in a specific dartboard
 dartboard = 'Engineering/backend' AND blocker_ids IS NOT NULL
 
 -- Critical tasks blocking a release
-priority = 'critical' AND blocking_ids CONTAINS 'duid_release_v2'
+priority = 5 AND blocking_ids CONTAINS 'duid_release_v2'
 
 -- Parent tasks with urgent tag
 subtask_ids IS NOT NULL AND tags CONTAINS 'urgent'
 
 -- Unblocked tasks ready to start
-blocker_ids IS NULL AND status = 'To Do' AND priority = 'high'
+blocker_ids IS NULL AND status = 'To Do' AND priority = 4
 ```
 
 ## IN and NOT IN for Multiple Values
@@ -138,7 +138,7 @@ blocker_ids IS NULL AND status = 'To Do' AND priority = 'high'
 status IN ('To Do', 'Doing', 'Blocked')
 
 -- Exclude specific priorities
-priority NOT IN ('low')
+priority NOT IN (1, 2)
 ```
 
 ## NULL Checks for Optional Fields
@@ -162,7 +162,7 @@ DartQL queries are fastest when they use API-compatible filters. See [Query Perf
 
 **Fast pattern** -- equality with AND:
 ```sql
-status = 'To Do' AND dartboard = 'Engineering/backend' AND priority = 'high'
+status = 'To Do' AND dartboard = 'Engineering/backend' AND priority = 4
 ```
 
 **Slower pattern** -- OR, LIKE, CONTAINS, and other advanced operators require client-side filtering:

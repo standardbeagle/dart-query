@@ -33,7 +33,7 @@ sidebar:
 DartQL uses **SQL-92 WHERE clause syntax** to filter tasks. If you know SQL, you already know DartQL.
 
 ```sql
-status = 'To Do' AND priority = 'high'
+status = 'To Do' AND priority = 4
 ```
 
 ## Syntax Overview
@@ -53,19 +53,19 @@ String values must be quoted with single quotes. Field names and operators are c
 | Operator | Description | Example |
 |----------|-------------|---------|
 | `=` | Equals | `status = 'To Do'` |
-| `!=` | Not equals | `priority != 'low'` |
-| `<>` | Not equals (SQL-92 alias for `!=`) | `priority <> 'low'` |
+| `!=` | Not equals | `priority != 2` |
+| `<>` | Not equals (SQL-92 alias for `!=`) | `priority <> 2` |
 | `>` | Greater than | `due_at > '2026-02-01'` |
-| `>=` | Greater than or equal | `priority >= 'high'` |
+| `>=` | Greater than or equal | `priority >= 4` |
 | `<` | Less than | `due_at < '2026-01-18'` |
-| `<=` | Less than or equal | `priority <= 'medium'` |
+| `<=` | Less than or equal | `priority <= 3` |
 
 ### Set Operators
 
 | Operator | Description | Example |
 |----------|-------------|---------|
 | `IN` | Value is in a list | `status IN ('To Do', 'Doing')` |
-| `NOT IN` | Value is not in a list | `priority NOT IN ('low')` |
+| `NOT IN` | Value is not in a list | `priority NOT IN (1, 2)` |
 | `BETWEEN` | Value is within a range (inclusive) | `created_at BETWEEN '2026-01-01' AND '2026-01-31'` |
 
 ### Pattern and Array Operators
@@ -92,10 +92,10 @@ Combine conditions with logical operators:
 
 | Operator | Description | Example |
 |----------|-------------|---------|
-| `AND` | Both conditions must be true | `status = 'To Do' AND priority = 'high'` |
+| `AND` | Both conditions must be true | `status = 'To Do' AND priority = 4` |
 | `OR` | Either condition must be true | `status = 'To Do' OR status = 'Doing'` |
-| `NOT` | Negates a condition | `NOT (priority = 'low')` |
-| `( )` | Groups conditions to control evaluation order | `(status = 'To Do' OR status = 'Doing') AND priority = 'high'` |
+| `NOT` | Negates a condition | `NOT (priority = 2)` |
+| `( )` | Groups conditions to control evaluation order | `(status = 'To Do' OR status = 'Doing') AND priority = 4` |
 
 **Precedence** (highest to lowest):
 1. `( )` -- parenthesized groups
@@ -106,19 +106,19 @@ Combine conditions with logical operators:
 Without parentheses, `AND` binds tighter than `OR`. This query:
 
 ```sql
-status = 'To Do' OR status = 'Doing' AND priority = 'high'
+status = 'To Do' OR status = 'Doing' AND priority = 4
 ```
 
 is evaluated as:
 
 ```sql
-status = 'To Do' OR (status = 'Doing' AND priority = 'high')
+status = 'To Do' OR (status = 'Doing' AND priority = 4)
 ```
 
 Use parentheses to make intent explicit:
 
 ```sql
-(status = 'To Do' OR status = 'Doing') AND priority = 'high'
+(status = 'To Do' OR status = 'Doing') AND priority = 4
 ```
 
 ## Field Reference
@@ -128,8 +128,8 @@ Use parentheses to make intent explicit:
 | Field | Type | Description |
 |-------|------|-------------|
 | `status` | string | Task status (e.g., `'To Do'`, `'Doing'`, `'Done'`) |
-| `priority` | string | Priority level (e.g., `'low'`, `'medium'`, `'high'`, `'critical'`) |
-| `size` | string | Size estimate |
+| `priority` | integer | Priority level, `1` (lowest) to `5` (highest). Use [`get_config`](/dart-query/tools/discovery-config/#get_config) to see your workspace's label-to-number mapping. |
+| `size` | integer | Size estimate, `1` (XS) to `5` (XL) |
 | `title` | string | Task title |
 | `description` | string | Task description body |
 | `assignee` | string | Assignee email address |
@@ -169,12 +169,12 @@ dart-query automatically optimizes queries by pushing compatible filters to the 
 These filters are sent directly to the Dart API and return only matching tasks:
 
 - `=` equality on: `assignee`, `status`, `dartboard`, `priority`, `tags`
-- Range operators (`<`, `>`, `<=`, `>=`) on: `due_at`
+- Range operators (`<`, `>`, `<=`, `>=`) on: `due_at` only -- range operators on `priority` fall back to client-side filtering
 - `AND` logic only
 
 ```sql
 -- Fast: all conditions are API-compatible
-status = 'To Do' AND dartboard = 'Engineering/backend' AND priority = 'high'
+status = 'To Do' AND dartboard = 'Engineering/backend' AND priority = 4
 ```
 
 ### Client-Side Filters (Slower)
@@ -204,13 +204,13 @@ For best performance, combine API-compatible conditions with `AND` and limit cli
 ```sql
 status = 'To Do'
 dartboard = 'Engineering/backend'
-priority = 'high'
+priority = 4
 ```
 
 ### Multiple Conditions
 
 ```sql
-status = 'To Do' AND priority = 'high'
+status = 'To Do' AND priority = 4
 dartboard = 'Engineering/backend' AND assignee = 'john@company.com'
 ```
 
@@ -225,6 +225,6 @@ created_at BETWEEN '2026-01-01T00:00:00Z' AND '2026-01-31T23:59:59Z'
 ### Complex Queries
 
 ```sql
-(status = 'To Do' OR status = 'Doing') AND priority = 'high'
-dartboard = 'Engineering/backend' AND (priority = 'critical' OR tags CONTAINS 'urgent')
+(status = 'To Do' OR status = 'Doing') AND priority = 4
+dartboard = 'Engineering/backend' AND (priority = 5 OR tags CONTAINS 'urgent')
 ```

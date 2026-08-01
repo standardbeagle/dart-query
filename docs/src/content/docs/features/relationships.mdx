@@ -7,15 +7,19 @@ sidebar:
 
 ## Task Relationship Types
 
-dart-query supports five relationship types for modeling task dependencies:
+dart-query supports five relationship types for modeling task dependencies. Each has a canonical (industry-standard) field name and a legacy `_ids`-suffixed alias:
 
-| Type | Field | Meaning |
-|------|-------|---------|
-| **Subtasks** | `subtask_ids` | Child tasks that compose a parent task |
-| **Blockers** | `blocker_ids` | Tasks that must complete before this task can proceed |
-| **Blocking** | `blocking_ids` | Tasks that this task is blocking |
-| **Duplicates** | `duplicate_ids` | Tasks that duplicate this task |
-| **Related** | `related_ids` | Tasks with a logical connection but no dependency |
+| Type | Canonical Field | Legacy Field | Meaning |
+|------|------------------|--------------|---------|
+| **Subtasks** | `subtasks` | `subtask_ids` | Child tasks that compose a parent task |
+| **Blockers** | `blocked_by` | `blocker_ids` | Tasks that must complete before this task can proceed |
+| **Blocking** | `blocks` | `blocking_ids` | Tasks that this task is blocking |
+| **Duplicates** | `duplicates` | `duplicate_ids` | Tasks that duplicate this task |
+| **Related** | `related` | `related_ids` | Tasks with a logical connection but no dependency |
+
+:::caution[Legacy field names]
+The `_ids`-suffixed names (`subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`, and `parent_task`) still work but are deprecated and scheduled for removal in 0.13.0. New code should use the canonical names shown above (or `parent` in place of `parent_task`).
+:::
 
 ## Creating Tasks with Relationships
 
@@ -25,15 +29,15 @@ Set relationships at creation time by passing arrays of dart_id values:
 create_task({
   title: "Deploy OAuth2 to production",
   dartboard: "Engineering/backend",
-  priority: "high",
-  blocker_ids: ["duid_oauth_impl"]
+  priority: 4,
+  blocked_by: ["duid_oauth_impl"]
 })
 
 create_task({
   title: "Update user documentation",
   dartboard: "Documentation",
-  related_ids: ["duid_oauth_impl", "duid_api_docs"],
-  blocking_ids: ["duid_release_v2"]
+  related: ["duid_oauth_impl", "duid_api_docs"],
+  blocks: ["duid_release_v2"]
 })
 ```
 
@@ -47,25 +51,25 @@ Use `update_task` to modify relationships on existing tasks.
 // Set blockers (replaces any existing blockers)
 update_task({
   dart_id: "duid_deploy_task",
-  blocker_ids: ["duid_testing", "duid_code_review"]
+  blocked_by: ["duid_testing", "duid_code_review"]
 })
 
 // Clear all blockers
 update_task({
   dart_id: "duid_deploy_task",
-  blocker_ids: []
+  blocked_by: []
 })
 
 // Link related tasks (does not affect blockers or other types)
 update_task({
   dart_id: "duid_feature_a",
-  related_ids: ["duid_feature_b", "duid_feature_c"]
+  related: ["duid_feature_b", "duid_feature_c"]
 })
 ```
 
 ### Safe Modification Pattern
 
-To add a relationship without losing existing ones, read the current state first:
+`update_task` also accepts `add_to` and `remove_from` objects that merge into existing relationship arrays instead of replacing them -- see [Task Management](/dart-query/tools/task-management/#update_task) for that shortcut. To add a relationship manually without losing existing ones, read the current state first:
 
 ```typescript
 // Step 1: Get current relationships
@@ -75,10 +79,32 @@ const task = get_task({ dart_id: "duid_deploy_task" })
 // Step 2: Append and update
 update_task({
   dart_id: "duid_deploy_task",
-  blocker_ids: [...task.blocker_ids, "duid_code_review"]
+  blocked_by: [...task.blocker_ids, "duid_code_review"]
 })
 // blocker_ids is now ["duid_testing", "duid_code_review"]
 ```
+
+## Linking Existing Tasks Atomically
+
+`link_tasks` writes both sides of a relationship in one call, so the graph never ends up one-sided (a `parent` set on the child without a matching entry in the parent's `subtasks`, for example). Prefer it over hand-editing relationship arrays on two separate `update_task` calls.
+
+```typescript
+// Anchor task gets a parent; the parent's subtasks array is updated to match
+link_tasks({
+  type: "parent",
+  from: "duid_oauth_subtask",
+  to: ["duid_oauth_epic"]
+})
+
+// Anchor task blocks one or more others; each target's blocked_by is updated to match
+link_tasks({
+  type: "blocks",
+  from: "duid_migration",
+  to: ["duid_deploy_prod", "duid_release_notes"]
+})
+```
+
+`type` accepts `parent`, `subtasks`, `blocks`, `blocked_by`, `duplicates`, or `related`. For `type: "parent"`, `to` must contain exactly one dart_id; the other types accept any number of targets. The response includes `mirror_applied` (which inverse-side tasks were patched) and `mirror_warnings` (any inverse-side writes that failed).
 
 ## Viewing Relationships
 

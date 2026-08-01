@@ -23,17 +23,19 @@ Create a new task with properties and relationships.
 | `tags` | `string[]` | No | Tag dart_ids |
 | `due_at` | `string` | No | Due date (ISO 8601) |
 | `start_at` | `string` | No | Start date (ISO 8601) |
-| `parent_task` | `string` | No | Parent task dart_id |
-| `subtask_ids` | `string[]` | No | Subtask dart_ids |
-| `blocker_ids` | `string[]` | No | Tasks that block this task |
-| `blocking_ids` | `string[]` | No | Tasks this task blocks |
-| `duplicate_ids` | `string[]` | No | Duplicate task dart_ids |
-| `related_ids` | `string[]` | No | Related task dart_ids |
+| `parent` | `string` | No | Parent task dart_id |
+| `subtasks` | `string[]` | No | Subtask dart_ids. Setting this mirrors `parent` onto each child. |
+| `blocked_by` | `string[]` | No | Tasks that block this task. Setting this mirrors `blocks` onto each listed task. |
+| `blocks` | `string[]` | No | Tasks this task blocks. Setting this mirrors `blocked_by` onto each listed task. |
+| `duplicates` | `string[]` | No | Duplicate task dart_ids. Bidirectional mirror. |
+| `related` | `string[]` | No | Related task dart_ids. Bidirectional mirror. |
 | `comment` | `string` | No | Comment to add after creation |
+
+The legacy `_ids`-suffixed names (`parent_task`, `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`) are accepted as deprecated aliases and are scheduled for removal in 0.13.0. Use the canonical names above in new code.
 
 ### Response
 
-Returns the full created task object with `dart_id`, `title`, `status`, and all set fields.
+Returns the full created task object with `dart_id`, `title`, `status`, `mirror_applied` (inverse-side tasks patched by relationship mirroring), and all set fields.
 
 ### Examples
 
@@ -56,7 +58,7 @@ create_task({
   priority: 4,
   assignees: ["duid_user1"],
   tags: ["duid_auth"],
-  blocker_ids: ["duid_task_design"],
+  blocked_by: ["duid_task_design"],
   comment: "Spec approved in design review"
 })
 ```
@@ -119,17 +121,19 @@ Update task properties. Uses flat parameters (not nested). Relationship arrays u
 | `tags` | `string[]` | No | Tag dart_ids or names |
 | `due_at` | `string` | No | Due date (ISO 8601) |
 | `start_at` | `string` | No | Start date (ISO 8601) |
-| `parent_task` | `string` | No | Parent task dart_id |
-| `subtask_ids` | `string[]` | No | Full replacement of subtask IDs (`[]` to clear) |
-| `blocker_ids` | `string[]` | No | Full replacement of blocker IDs (`[]` to clear) |
-| `blocking_ids` | `string[]` | No | Full replacement of blocking IDs (`[]` to clear) |
-| `duplicate_ids` | `string[]` | No | Full replacement of duplicate IDs (`[]` to clear) |
-| `related_ids` | `string[]` | No | Full replacement of related IDs (`[]` to clear) |
+| `parent` | `string` | No | Parent task dart_id |
+| `subtasks` | `string[]` | No | Full replacement of subtask IDs (`[]` to clear) |
+| `blocked_by` | `string[]` | No | Full replacement of blocker IDs (`[]` to clear) |
+| `blocks` | `string[]` | No | Full replacement of blocking IDs (`[]` to clear) |
+| `duplicates` | `string[]` | No | Full replacement of duplicate IDs (`[]` to clear) |
+| `related` | `string[]` | No | Full replacement of related IDs (`[]` to clear) |
 | `comment` | `string` | No | Comment to add after updating |
 | `add_to` | `object` | No | Append IDs to relationship arrays (merges and deduplicates) |
 | `remove_from` | `object` | No | Remove IDs from relationship arrays |
 
-The `add_to` and `remove_from` objects accept these keys: `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`.
+The legacy `_ids`-suffixed names (`parent_task`, `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`) are accepted as deprecated aliases for the fields above and are scheduled for removal in 0.13.0.
+
+The `add_to` and `remove_from` objects accept only the legacy key names: `subtask_ids`, `blocker_ids`, `blocking_ids`, `duplicate_ids`, `related_ids`.
 
 ### Response
 
@@ -161,7 +165,7 @@ update_task({
 ```typescript
 update_task({
   dart_id: "duid_abc123",
-  related_ids: []
+  related: []
 })
 ```
 

@@ -27,7 +27,7 @@ Assign all unassigned high-priority backend tasks to a specific engineer:
 
 ```sql
 UPDATE WHERE dartboard = 'Engineering/backend'
-  AND priority = 'high'
+  AND priority = 4
   AND assignee IS NULL
   SET assignees = ['engineer@company.com']
 ```
@@ -49,8 +49,8 @@ Escalate overdue tasks that are still open:
 ```sql
 UPDATE WHERE due_at < '2026-04-09T00:00:00Z'
   AND status != 'Done'
-  AND priority = 'high'
-  SET priority = 'critical'
+  AND priority = 4
+  SET priority = 5
   COMMENT 'Auto-escalated: overdue'
 ```
 
@@ -73,7 +73,7 @@ UPDATE WHERE completed_at >= '2026-01-01T00:00:00Z'
 Remove tasks that haven't been updated in months and are still in the backlog:
 
 ```sql
-DELETE WHERE priority = 'low'
+DELETE WHERE priority = 1
   AND updated_at < '2025-10-01T00:00:00Z'
   AND status = 'To Do'
   CONFIRM
@@ -98,7 +98,7 @@ UPDATE WHERE status = 'Done' AND dartboard = 'Engineering/backend'
   SET dartboard = 'Archive/2026-Q1';
 DELETE WHERE status = 'To Do'
   AND updated_at < '2025-07-01T00:00:00Z'
-  AND priority = 'low'
+  AND priority = 1
   CONFIRM
 ```
 
@@ -131,7 +131,7 @@ UPDATE WHERE created_at BETWEEN '2026-03-01T00:00:00Z' AND '2026-03-31T23:59:59Z
 Identify critical tasks with no owner:
 
 ```sql
-UPDATE WHERE priority = 'critical'
+UPDATE WHERE priority = 5
   AND assignee IS NULL
   SET tags = ['needs-owner']
 ```
@@ -155,7 +155,7 @@ UPDATE WHERE title LIKE '%authentication%'
 Mark critical tasks as blocking a release:
 
 ```sql
-UPDATE WHERE priority = 'critical' AND status != 'Done'
+UPDATE WHERE priority = 5 AND status != 'Done'
   SET blocking_ids = ['duid_release_v2']
 ```
 
@@ -180,7 +180,7 @@ Tag and link all security-related tasks to an audit tracker:
 ```sql
 UPDATE WHERE tags CONTAINS 'security'
   SET related_ids = ['duid_security_audit_2026'],
-      priority = 'critical'
+      priority = 5
 ```
 
 ### Find Parent Tasks with Subtasks
@@ -247,7 +247,7 @@ After importing, tag the batch so you can manage them together:
 ```sql
 UPDATE WHERE dartboard = 'Engineering/backend'
   AND tags CONTAINS 'imported'
-  SET priority = 'medium'
+  SET priority = 3
 ```
 
 Add an `imported` tag column in your CSV, or use the `default_values` parameter during import to auto-tag.
